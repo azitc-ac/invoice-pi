@@ -69,6 +69,31 @@ def accept_cookies_hard(page: Page):
     except Exception:
         pass
 
+def wait_and_click(page: Page, locator, timeout_ms: int = 30000, retries: int = 3):
+    """Warte auf Element, bis es clickbar ist, mit Retry-Logik"""
+    from playwright.sync_api import Locator
+    attempt = 0
+    last_error = None
+    
+    while attempt < retries:
+        try:
+            # Warte bis Element sichtbar ist
+            locator.wait_for(state="visible", timeout=timeout_ms)
+            # Versuche zu klicken
+            locator.click(timeout=5000)
+            log(f"Click erfolgreich nach {attempt + 1} Versuch(en)", "DEBUG")
+            return True
+        except Exception as e:
+            last_error = e
+            attempt += 1
+            if attempt < retries:
+                wait_time = 500 * attempt  # exponential backoff
+                log(f"Click-Versuch {attempt} fehlgeschlagen, warte {wait_time}ms: {str(e)[:80]}", "DEBUG")
+                time.sleep(wait_time / 1000)
+            else:
+                log(f"Click fehlgeschlagen nach {retries} Versuchen: {str(e)[:100]}", "WARN")
+                raise last_error
+
 def wait_network_idle(page: Page, timeout_ms: int = 15000):
     try:
         page.wait_for_load_state("networkidle", timeout=timeout_ms)

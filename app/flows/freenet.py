@@ -40,12 +40,28 @@ def run_freenet_download(download_dir: str = DOWNLOAD_DIR):
         log(f"Gehe zu {LOGIN_URL}")
         page.goto(LOGIN_URL, wait_until="domcontentloaded")
 
+        # Cookies früh akzeptieren
+        accept_cookies_hard(page)
+        page.wait_for_timeout(500)
+
         page.fill("#username", FR_USER)
         page.fill("#password", FR_PASS)
-        page.get_by_role("button", name=re.compile("Anmelden", re.I)).click()
+        
+        # Warte darauf, dass der Button aktiviert wird (Captcha etc.)
+        submit_btn = page.get_by_role("button", name=re.compile("Anmelden", re.I))
+        try:
+            # Warte bis enabled (max 20 Sekunden für Captcha)
+            page.wait_for_function(
+                "() => document.querySelector('button[type=submit]') && !document.querySelector('button[type=submit]').disabled",
+                timeout=20000
+            )
+            log("Anmelden-Button ist jetzt aktiviert", "DEBUG")
+        except Exception as e:
+            log(f"Button aktivierung Timeout, versuche trotzdem: {e}", "WARN")
+        
+        submit_btn.click()
 
         wait_network_idle(page)
-        accept_cookies_hard(page)
         page.wait_for_timeout(500)
         wait_network_idle(page)
 

@@ -26,11 +26,12 @@ def run_netaachen_download(download_dir: str = DOWNLOAD_DIR):
         wait_network_idle(page)
         accept_cookies_easy(page)
 
-        page.get_by_text("Meine Rechnungen", exact=False).click(timeout=20000)
+        # Nutze .first statt exact=False um strict mode zu vermeiden
+        page.get_by_text("Meine Rechnungen").first.click(timeout=20000)
         wait_network_idle(page)
-        page.get_by_text("Aktuelle Rechnung", exact=False).click(timeout=20000)
+        page.get_by_text("Aktuelle Rechnung").first.click(timeout=20000)
         wait_network_idle(page)
-        page.get_by_text("Download", exact=False).click(timeout=20000)
+        page.get_by_text("Download").first.click(timeout=20000)
 
         modal = page.locator("[data-e2e='modal-billing-download-landline']")
         if not modal.count():
