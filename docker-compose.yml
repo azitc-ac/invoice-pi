@@ -1,0 +1,19 @@
+services:
+  invoices:
+    build: .
+    container_name: invoice-downloader
+    env_file:
+      - ./.env
+    environment:
+      DOWNLOAD_DIR: "${DOWNLOAD_DIR:-/downloads}"
+      PW_USERDATA_FREENET: "${PW_USERDATA_FREENET:-/pwdata/freenet}"
+      PW_USERDATA_NETAACHEN: "${PW_USERDATA_NETAACHEN:-/pwdata/netaachen}"
+      HEADLESS: "${HEADLESS:-true}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      PORT: "${PORT:-8080}"
+    volumes:
+      - ./app:/app
+      - ./downloads:/downloads
+      - ./pwdata:/pwdata
+    ports:
+      - "${PORT:-8080}:8080"
