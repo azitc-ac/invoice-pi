@@ -1,6 +1,6 @@
 import os
 from playwright.sync_api import sync_playwright
-from app.common import (
+from common import (
     log, launch_persistent, accept_cookies_easy, wait_network_idle, save_download
 )
 

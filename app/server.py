@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from app.flows.freenet import run_freenet_download
-from app.flows.netaachen import run_netaachen_download
+from flows.freenet import run_freenet_download
+from flows.netaachen import run_netaachen_download
 
 app = FastAPI()
 
