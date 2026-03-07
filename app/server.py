@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List
-from flows.freenet_v2 import run_freenet_download
+from flows.freenet_v3 import run_freenet_download
 from flows.netaachen_v2 import run_netaachen_download
 from fastapi.responses import FileResponse
 import os
