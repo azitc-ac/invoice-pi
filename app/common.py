@@ -1,5 +1,6 @@
 import os
 import time
+from datetime import datetime
 from pathlib import Path
 from playwright.sync_api import Page, BrowserContext
 
@@ -9,7 +10,9 @@ DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "/downloads")
 def log(msg: str, level: str = "INFO"):
     levels = ["DEBUG", "INFO", "WARN", "ERROR"]
     if levels.index(level) >= levels.index(LOG_LEVEL):
-        print(f"[{level}] {msg}", flush=True)
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_msg = f"[{timestamp}] [{level}] {msg}"
+        print(log_msg, flush=True)
 
 def ensure_dirs():
     Path(DOWNLOAD_DIR).mkdir(parents=True, exist_ok=True)
