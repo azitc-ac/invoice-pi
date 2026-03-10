@@ -4,13 +4,18 @@ ENV DEBIAN_FRONTEND noninteractive
 ENV DISPLAY :0
 ENV RES 1280x900x24
 
-# Install VNC + GUI components (OHNE websockify!)
+# Install VNC + GUI components (AS ROOT!)
 RUN apt-get update && apt-get -y install \
     xvfb x11vnc \
     supervisor fluxbox \
-    net-tools wget \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    net-tools wget && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install websockify separately AS ROOT (critical for noVNC)
+RUN apt-get update && apt-get install -y websockify && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Download noVNC lokal (wie das alte solarkennedy Setup!)
 RUN mkdir -p /root && \
@@ -18,8 +23,30 @@ RUN mkdir -p /root && \
     wget -q https://github.com/novnc/noVNC/archive/refs/tags/v1.3.0.tar.gz && \
     tar -xzf v1.3.0.tar.gz && \
     mv noVNC-1.3.0 novnc && \
-    rm v1.3.0.tar.gz && \
-    chmod +x /root/novnc/utils/novnc_proxy
+    rm v1.3.0.tar.gz
+
+# Erstelle launch.sh Script (wie das alte solarkennedy Setup)
+RUN echo '#!/bin/bash' > /root/novnc/utils/launch.sh && \
+    echo 'PORT="6080"' >> /root/novnc/utils/launch.sh && \
+    echo 'VNC_DEST="localhost:5900"' >> /root/novnc/utils/launch.sh && \
+    echo 'WEB=""' >> /root/novnc/utils/launch.sh && \
+    echo 'while [ "$*" ]; do' >> /root/novnc/utils/launch.sh && \
+    echo '    param=$1; shift; OPTARG=$1' >> /root/novnc/utils/launch.sh && \
+    echo '    case $param in' >> /root/novnc/utils/launch.sh && \
+    echo '    --listen)  PORT="${OPTARG}"; shift            ;;' >> /root/novnc/utils/launch.sh && \
+    echo '    --vnc)     VNC_DEST="${OPTARG}"; shift        ;;' >> /root/novnc/utils/launch.sh && \
+    echo '    --web)     WEB="${OPTARG}"; shift            ;;' >> /root/novnc/utils/launch.sh && \
+    echo '    *) shift                                      ;;' >> /root/novnc/utils/launch.sh && \
+    echo '    esac' >> /root/novnc/utils/launch.sh && \
+    echo 'done' >> /root/novnc/utils/launch.sh && \
+    echo 'if [ -z "${WEB}" ]; then' >> /root/novnc/utils/launch.sh && \
+    echo '    WEB="/root/novnc"' >> /root/novnc/utils/launch.sh && \
+    echo 'fi' >> /root/novnc/utils/launch.sh && \
+    echo 'echo "Starting WebSockets proxy on port ${PORT}"' >> /root/novnc/utils/launch.sh && \
+    echo 'exec /usr/bin/websockify --web ${WEB} ${PORT} ${VNC_DEST}' >> /root/novnc/utils/launch.sh && \
+    chmod +x /root/novnc/utils/launch.sh
+
+# Copy Python scripts for invoice downloading
 
 WORKDIR /app
 
@@ -63,7 +90,7 @@ RUN mkdir -p /etc/supervisor/conf.d && \
     echo 'priority=3' >> /etc/supervisor/conf.d/supervisord.conf && \
     echo '' >> /etc/supervisor/conf.d/supervisord.conf && \
     echo '[program:novnc]' >> /etc/supervisor/conf.d/supervisord.conf && \
-    echo 'command=python3 /root/novnc/utils/novnc_proxy --vnc localhost:5900 --listen 8080' >> /etc/supervisor/conf.d/supervisord.conf && \
+    echo 'command=bash /root/novnc/utils/launch.sh --vnc localhost:5900 --listen 8080' >> /etc/supervisor/conf.d/supervisord.conf && \
     echo 'autostart=true' >> /etc/supervisor/conf.d/supervisord.conf && \
     echo 'autorestart=true' >> /etc/supervisor/conf.d/supervisord.conf && \
     echo 'priority=4' >> /etc/supervisor/conf.d/supervisord.conf && \
