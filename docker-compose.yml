@@ -11,7 +11,7 @@ services:
     
     # Environment
     environment:
-      - HEADLESS=false           # Browser SICHTBAR (wichtig!)
+      - HEADLESS=true           # Browser SICHTBAR (wichtig!)
       - DISPLAY=:0               # X11 Display
       - LOG_LEVEL=DEBUG
     
