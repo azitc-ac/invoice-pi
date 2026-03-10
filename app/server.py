@@ -16,6 +16,13 @@ app = FastAPI()
 
 API_KEY = os.getenv("API_KEY", "")
 
+def is_headless() -> bool:
+    """Headless=False wenn Debug-Modus (VNC) aktiv, sonst aus .env"""
+    if check_debug_mode():
+        print("🖥️  Debug-Modus aktiv → headless=False")
+        return False
+    return os.getenv("HEADLESS", "true").lower() != "false"
+
 @app.middleware("http")
 async def api_key_middleware(request: Request, call_next):
     # Health-Endpoint ist immer offen (z.B. für App Proxy Health-Check)
@@ -105,10 +112,10 @@ def download(req: DownloadRequest):
     """Trigger Download, gibt Dateipfade zurück (lokale Speicherung)"""
     site = req.site.strip().lower()
     if site == "freenet":
-        files = run_freenet_download()
+        files = run_freenet_download(headless=is_headless())
         return {"status": "ok", "site": "freenet", "files": files}
     elif site == "netaachen":
-        files = run_netaachen_download()
+        files = run_netaachen_download(headless=is_headless())
         return {"status": "ok", "site": "netaachen", "files": files}
     else:
         raise HTTPException(status_code=400, detail="Unsupported site")
@@ -118,9 +125,9 @@ def download_file(req: DownloadRequest):
     """Trigger Download und liefere die PDF-Datei direkt zurück (für Power Automate)"""
     site = req.site.strip().lower()
     if site == "freenet":
-        files: List[str] = run_freenet_download()
+        files: List[str] = run_freenet_download(headless=is_headless())
     elif site == "netaachen":
-        files: List[str] = run_netaachen_download()
+        files: List[str] = run_netaachen_download(headless=is_headless())
     else:
         raise HTTPException(status_code=400, detail="Unsupported site")
     
