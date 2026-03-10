@@ -119,6 +119,11 @@ def check_debug_mode():
     """Check if debug mode (VNC) is active"""
     return get_supervisor_status("novnc") and get_supervisor_status("xvfb")
 
+def get_vnc_url(request: Request) -> str:
+    """VNC URL dynamisch aus dem Request-Host bauen"""
+    host = request.headers.get("host", "localhost").split(":")[0]
+    return f"http://{host}:8081/vnc.html"
+
 # ============================================================
 # API ENDPOINTS - Download
 # ============================================================
@@ -227,7 +232,7 @@ def _open_browser_for_login(site: str):
 
 
 @app.post("/session/init")
-def session_init(req: DownloadRequest):
+def session_init(req: DownloadRequest, request: Request):
     """
     Öffnet Browser im GUI-Modus mit vorausgefüllten Credentials.
     User klickt manuell auf Anmelden → Session wird gespeichert.
@@ -252,7 +257,7 @@ def session_init(req: DownloadRequest):
         "status": "ok",
         "site": site,
         "message": "Browser geöffnet, Credentials vorausgefüllt. Bitte manuell auf Anmelden klicken.",
-        "vnc_url": "http://192.168.1.125:8081/vnc.html",
+        "vnc_url": get_vnc_url(request),
         "timeout_minutes": 5,
     }
 
@@ -266,13 +271,13 @@ def health():
     return {"status": "ok"}
 
 @app.get("/debug/status")
-def debug_status():
+def debug_status(request: Request):
     """Check debug mode status"""
     is_enabled = check_debug_mode()
     
     return {
         "debug_enabled": is_enabled,
-        "vnc_url": "http://192.168.1.125:8081/vnc.html" if is_enabled else None,
+        "vnc_url": get_vnc_url(request) if is_enabled else None,
         "services": {
             "xvfb": get_supervisor_status("xvfb"),
             "fluxbox": get_supervisor_status("fluxbox"),
@@ -283,14 +288,14 @@ def debug_status():
     }
 
 @app.post("/debug/enable")
-def debug_enable():
+def debug_enable(request: Request):
     """Enable debug mode (start VNC services)"""
     
     if check_debug_mode():
         return {
             "status": "already_enabled",
             "message": "Debug mode is already active",
-            "vnc_url": "http://192.168.1.125:8081/vnc.html"
+            "vnc_url": get_vnc_url(request)
         }
     
     print("🚀 Starting VNC services...")
@@ -303,7 +308,7 @@ def debug_enable():
     return {
         "status": "enabled" if is_enabled else "partial",
         "message": "Debug mode activated - VNC services started",
-        "vnc_url": "http://192.168.1.125:8081/vnc.html" if is_enabled else None,
+        "vnc_url": get_vnc_url(request) if is_enabled else None,
         "services": results
     }
 
