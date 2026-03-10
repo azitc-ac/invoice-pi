@@ -489,12 +489,79 @@
 
 <div id="toast-container"></div>
 
+<!-- API KEY OVERLAY -->
+<div id="key-overlay" style="display:none;position:fixed;inset:0;background:#0d0f12ee;z-index:200;align-items:center;justify-content:center;">
+  <div style="background:#13161b;border:1px solid #252a33;border-radius:14px;padding:36px;width:360px;display:flex;flex-direction:column;gap:16px;">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;color:#00e5a0;">invoice-pi · admin</div>
+    <div style="font-size:13px;color:#64748b;font-family:'DM Sans',sans-serif;">API-Key eingeben um fortzufahren</div>
+    <input id="key-input" type="password" placeholder="X-API-Key"
+      style="background:#0d0f12;color:#e2e8f0;border:1px solid #252a33;border-radius:7px;padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:13px;outline:none;width:100%;">
+    <div id="key-error" style="display:none;font-size:12px;color:#ff4466;font-family:'JetBrains Mono',monospace;">❌ Ungültiger API-Key</div>
+    <button id="key-submit-btn" onclick="submitApiKey()"
+      style="background:#00e5a0;color:#000;border:none;border-radius:7px;padding:10px;font-family:'DM Sans',sans-serif;font-weight:600;font-size:13px;cursor:pointer;">
+      Anmelden
+    </button>
+  </div>
+</div>
+
 <script>
   const API = '';  // leer = same origin
   let autoscroll = true;
   let ws = null;
   let debugActive = false;
   let vncUrl = null;
+
+  // ── API KEY ───────────────────────────────────────────────
+  let apiKey = sessionStorage.getItem('invoice_pi_api_key') || '';
+
+  function authHeaders(extra = {}) {
+    return { 'X-API-Key': apiKey, ...extra };
+  }
+
+  async function verifyApiKey(key) {
+    try {
+      const r = await fetch(`${API}/health`, { headers: { 'X-API-Key': key } });
+      return r.ok;
+    } catch { return false; }
+  }
+
+  function showKeyDialog() {
+    document.getElementById('key-overlay').style.display = 'flex';
+    document.getElementById('key-input').focus();
+  }
+
+  function hideKeyDialog() {
+    document.getElementById('key-overlay').style.display = 'none';
+  }
+
+  async function submitApiKey() {
+    const key = document.getElementById('key-input').value.trim();
+    const btn = document.getElementById('key-submit-btn');
+    const err = document.getElementById('key-error');
+    if (!key) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Prüfe...';
+    err.style.display = 'none';
+
+    const ok = await verifyApiKey(key);
+    if (ok) {
+      apiKey = key;
+      sessionStorage.setItem('invoice_pi_api_key', key);
+      hideKeyDialog();
+      initApp();
+    } else {
+      err.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Anmelden';
+    }
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && document.getElementById('key-overlay').style.display === 'flex') {
+      submitApiKey();
+    }
+  });
 
   // ── HEALTH CHECK ──────────────────────────────────────────
   async function checkHealth() {
@@ -512,7 +579,7 @@
   // ── DEBUG TOGGLE ──────────────────────────────────────────
   async function fetchDebugStatus() {
     try {
-      const r = await fetch(`${API}/debug/status`);
+      const r = await fetch(`${API}/debug/status`, { headers: authHeaders() });
       const d = await r.json();
       setDebugUI(d.debug_enabled, d.vnc_url);
     } catch {}
@@ -539,7 +606,7 @@
     const enable = e.target.checked;
     const endpoint = enable ? '/debug/enable' : '/debug/disable';
     try {
-      const r = await fetch(`${API}${endpoint}`, { method: 'POST' });
+      const r = await fetch(`${API}${endpoint}`, { method: 'POST', headers: authHeaders() });
       const d = await r.json();
       setDebugUI(d.debug_enabled ?? enable, d.vnc_url);
       toast(enable ? 'Debug-Modus aktiviert' : 'Debug-Modus deaktiviert',
@@ -570,7 +637,7 @@
     try {
       const r = await fetch(`${API}/session/init`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ site })
       });
       const d = await r.json();
@@ -602,7 +669,7 @@
     try {
       const r = await fetch(`${API}/download`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ site })
       });
       const d = await r.json();
@@ -632,7 +699,7 @@
   function connectWS() {
     if (ws && ws.readyState < 2) return; // already open/connecting
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsUrl = `${proto}://${location.host}/ws/logs`;
+    const wsUrl = `${proto}://${location.host}/ws/logs?api_key=${encodeURIComponent(apiKey)}`;
     ws = new WebSocket(wsUrl);
     loggingEnabled = true;
     document.getElementById('log-toggle-btn').textContent = 'logging ✓';
@@ -723,11 +790,23 @@
   }
 
   // ── INIT ──────────────────────────────────────────────────
-  checkHealth();
-  setInterval(checkHealth, 15000);
-  fetchDebugStatus();
-  setInterval(fetchDebugStatus, 10000);
-  // Logging + Debug off by default — user enables manually
+  function initApp() {
+    checkHealth();
+    setInterval(checkHealth, 15000);
+    fetchDebugStatus();
+    setInterval(fetchDebugStatus, 10000);
+    // Logging + Debug off by default — user enables manually
+  }
+
+  // API Key prüfen — Dialog zeigen wenn nicht gesetzt oder ungültig
+  if (apiKey) {
+    verifyApiKey(apiKey).then(ok => {
+      if (ok) { initApp(); }
+      else { sessionStorage.removeItem('invoice_pi_api_key'); apiKey = ''; showKeyDialog(); }
+    });
+  } else {
+    showKeyDialog();
+  }
 </script>
 </body>
 </html>

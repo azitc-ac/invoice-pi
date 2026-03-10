@@ -339,7 +339,12 @@ def find_log_file() -> str | None:
     return matches[0] if matches else None
 
 @app.websocket("/ws/logs")
-async def ws_logs(websocket: WebSocket):
+async def ws_logs(websocket: WebSocket, api_key: str = ""):
+    # Auth prüfen (WebSocket kann keine HTTP-Header senden, daher Query-Parameter)
+    if API_KEY and api_key != API_KEY:
+        await websocket.close(code=1008)  # Policy violation
+        return
+
     await websocket.accept()
     log_path = find_log_file()
 
