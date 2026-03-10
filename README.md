@@ -8,7 +8,7 @@ API-Container für den automatisierten Rechnungsdownload **Freenet** & **NetAach
 
 ## Schnellstart
 
-```bash
+bash
 cp .env.sample .env
 # .env bearbeiten (Credentials setzen)
 
@@ -18,7 +18,7 @@ docker compose up --build
 curl -s -X POST http://localhost:8080/download       -H "Content-Type: application/json"       -d '{"site":"freenet"}' | jq
 
 curl -s -X POST http://localhost:8080/download       -H "Content-Type: application/json"       -d '{"site":"netaachen"}' | jq
-```
+
 
 ## Umgebungsvariablen
 Siehe `.env.sample`. Wichtige Flags:
