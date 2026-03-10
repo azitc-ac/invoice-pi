@@ -107,7 +107,14 @@ def run_freenet_download(headless=True):
     
     print(f"\n🚀 Starte Playwright (headless={headless})")
     print(f"📁 User Data Dir: {PW_USERDATA}")
-    
+
+    # Stale Lock-Dateien entfernen (verhindert "profile in use" Fehler nach Absturz)
+    for lock_file in ["SingletonLock", "SingletonCookie", "SingletonSocket"]:
+        lock_path = os.path.join(PW_USERDATA, lock_file)
+        if os.path.exists(lock_path):
+            os.remove(lock_path)
+            print(f"\U0001f9f9 Lock-Datei entfernt: {lock_path}")
+
     with sync_playwright() as p:
         context = p.chromium.launch_persistent_context(
             user_data_dir=PW_USERDATA,

@@ -26,6 +26,14 @@ print(f"👤 Username: {NA_USER}")
 print(f"\n🚀 Login läuft...\n")
 
 try:
+    # Stale Lock-Dateien entfernen
+    import os as _os
+    for lock_file in ["SingletonLock", "SingletonCookie", "SingletonSocket"]:
+        lock_path = _os.path.join(PW_USERDATA, lock_file)
+        if _os.path.exists(lock_path):
+            _os.remove(lock_path)
+            print(f"🧹 Lock-Datei entfernt: {lock_path}")
+
     with sync_playwright() as p:
         context = p.chromium.launch_persistent_context(
             user_data_dir=PW_USERDATA,
