@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>invoice-pi · Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f12;
+    --surface: #13161b;
+    --surface2: #1a1e25;
+    --border: #252a33;
+    --accent: #00e5a0;
+    --accent2: #0096ff;
+    --warn: #ff6b35;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --success: #00e5a0;
+    --danger: #ff4466;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: grid;
+    grid-template-rows: auto 1fr;
+  }
+
+  /* HEADER */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--surface);
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 18px;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+  }
+
+  .logo span { color: var(--muted); font-weight: 400; }
+
+  .status-pill {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.3s;
+  }
+  .dot.online { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .dot.offline { background: var(--danger); }
+
+  /* LAYOUT */
+  main {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 0;
+    height: calc(100vh - 65px);
+  }
+
+  /* SIDEBAR */
+  aside {
+    border-right: 1px solid var(--border);
+    padding: 28px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    overflow-y: auto;
+    background: var(--surface);
+  }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  /* TOGGLE */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    transition: border-color 0.2s;
+  }
+
+  .toggle-row:has(.toggle-switch input:checked) {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent)22;
+  }
+
+  .toggle-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .toggle-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+    font-family: var(--mono);
+  }
+
+  .toggle-switch {
+    position: relative;
+    width: 44px; height: 24px;
+  }
+
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+
+  .slider {
+    position: absolute; inset: 0;
+    background: var(--border);
+    border-radius: 24px;
+    cursor: pointer;
+    transition: background 0.3s;
+  }
+
+  .slider::before {
+    content: '';
+    position: absolute;
+    width: 18px; height: 18px;
+    left: 3px; top: 3px;
+    background: var(--muted);
+    border-radius: 50%;
+    transition: transform 0.3s, background 0.3s;
+  }
+
+  .toggle-switch input:checked + .slider { background: var(--accent)33; }
+  .toggle-switch input:checked + .slider::before {
+    transform: translateX(20px);
+    background: var(--accent);
+  }
+
+  /* CARD */
+  .card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+
+  .card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 12px;
+  }
+
+  /* SELECT */
+  select {
+    width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 9px 12px;
+    font-family: var(--sans);
+    font-size: 13px;
+    margin-bottom: 10px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+  }
+
+  select:focus { border-color: var(--accent); }
+
+  /* BUTTON */
+  .btn {
+    width: 100%;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 7px;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    letter-spacing: 0.3px;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+  }
+  .btn-primary:hover { background: #00ffb3; transform: translateY(-1px); }
+  .btn-primary:active { transform: translateY(0); }
+
+  .btn-secondary {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  .btn-danger {
+    background: var(--danger)22;
+    color: var(--danger);
+    border: 1px solid var(--danger)44;
+  }
+  .btn-danger:hover { background: var(--danger)33; }
+
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none !important;
+  }
+
+  /* SPINNER */
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    display: none;
+  }
+  .loading .spinner { display: block; }
+  .loading .btn-icon { display: none; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* TOAST */
+  #toast-container {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 100;
+  }
+
+  .toast {
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: var(--mono);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    animation: slideIn 0.2s ease;
+    max-width: 320px;
+  }
+  .toast.success { border-color: var(--accent); color: var(--accent); }
+  .toast.error { border-color: var(--danger); color: var(--danger); }
+  .toast.info { border-color: var(--accent2); color: var(--accent2); }
+
+  @keyframes slideIn {
+    from { transform: translateX(20px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+
+  /* LOG AREA */
+  .log-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--bg);
+  }
+
+  .log-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--surface);
+  }
+
+  .log-title {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .log-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+
+  .log-badge.connected {
+    background: var(--accent)11;
+    border-color: var(--accent)44;
+    color: var(--accent);
+  }
+
+  .log-controls {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+  }
+
+  .icon-btn {
+    padding: 6px 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 12px;
+    font-family: var(--mono);
+    transition: all 0.2s;
+  }
+  .icon-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  #log-output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 24px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.7;
+    color: #94a3b8;
+    scroll-behavior: smooth;
+  }
+
+  #log-output::-webkit-scrollbar { width: 6px; }
+  #log-output::-webkit-scrollbar-track { background: transparent; }
+  #log-output::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .log-line { display: block; padding: 1px 0; }
+  .log-line:hover { color: var(--text); }
+
+  .log-line.info { color: #64748b; }
+  .log-line.success { color: var(--accent); }
+  .log-line.error { color: var(--danger); }
+  .log-line.warn { color: var(--warn); }
+  .log-line.http { color: #7c3aed; }
+  .log-line.highlight { color: var(--accent2); }
+
+  .log-empty {
+    color: var(--muted);
+    text-align: center;
+    padding: 60px 0;
+    font-size: 13px;
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">invoice<span>-pi</span> · admin</div>
+  <div class="status-pill">
+    <div class="dot" id="health-dot"></div>
+    <span id="health-text">checking...</span>
+  </div>
+</header>
+
+<main>
+  <aside>
+
+    <!-- DEBUG MODE -->
+    <div>
+      <div class="section-label">Debug Mode</div>
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">VNC / sichtbarer Browser</div>
+          <div class="toggle-sub" id="debug-sub">inaktiv</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="debug-toggle">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div style="margin-top:10px; display:none" id="vnc-link-row">
+        <a id="vnc-link" href="#" target="_blank" style="font-family:var(--mono);font-size:11px;color:var(--accent2);text-decoration:none;">
+          → noVNC öffnen ↗
+        </a>
+      </div>
+    </div>
+
+    <!-- SESSION SPEICHERN -->
+    <div>
+      <div class="section-label">Session speichern</div>
+      <div class="card">
+        <div class="card-title">Manueller Login</div>
+        <select id="session-site">
+          <option value="freenet">Freenet</option>
+          <option value="netaachen">NetAachen</option>
+        </select>
+        <button class="btn btn-secondary" id="btn-session" onclick="initSession()">
+          <span class="btn-icon">🔐</span>
+          <div class="spinner"></div>
+          Browser öffnen & Login
+        </button>
+        <div style="margin-top:8px;font-size:11px;color:var(--muted);font-family:var(--mono);">
+          Credentials werden vorausgefüllt.<br>Nur noch Anmelden klicken.
+        </div>
+      </div>
+    </div>
+
+    <!-- DOWNLOAD TEST -->
+    <div>
+      <div class="section-label">Lokaler Download-Test</div>
+      <div class="card">
+        <div class="card-title">Rechnung herunterladen</div>
+        <select id="download-site">
+          <option value="freenet">Freenet</option>
+          <option value="netaachen">NetAachen</option>
+        </select>
+        <button class="btn btn-primary" id="btn-download" onclick="triggerDownload()">
+          <span class="btn-icon">⬇</span>
+          <div class="spinner"></div>
+          Jetzt herunterladen
+        </button>
+      </div>
+    </div>
+
+    <!-- SPACER -->
+    <div style="flex:1"></div>
+
+    <!-- VERSION -->
+    <div style="font-family:var(--mono);font-size:10px;color:var(--border);text-align:center;">
+      invoice-pi · fastapi + playwright
+    </div>
+
+  </aside>
+
+  <!-- LOG PANEL -->
+  <div class="log-panel">
+    <div class="log-header">
+      <div class="log-title">fastapi-stdout</div>
+      <div class="log-badge" id="ws-badge">disconnected</div>
+      <div class="log-controls">
+        <button class="icon-btn" onclick="clearLog()">clear</button>
+        <button class="icon-btn" id="autoscroll-btn" onclick="toggleAutoscroll()">autoscroll ✓</button>
+      </div>
+    </div>
+    <div id="log-output">
+      <span class="log-empty">Warte auf Log-Stream...</span>
+    </div>
+  </div>
+</main>
+
+<div id="toast-container"></div>
+
+<script>
+  const API = '';  // leer = same origin
+  let autoscroll = true;
+  let ws = null;
+  let debugActive = false;
+
+  // ── HEALTH CHECK ──────────────────────────────────────────
+  async function checkHealth() {
+    try {
+      const r = await fetch(`${API}/health`);
+      const ok = r.ok;
+      document.getElementById('health-dot').className = 'dot ' + (ok ? 'online' : 'offline');
+      document.getElementById('health-text').textContent = ok ? 'online' : 'offline';
+    } catch {
+      document.getElementById('health-dot').className = 'dot offline';
+      document.getElementById('health-text').textContent = 'unreachable';
+    }
+  }
+
+  // ── DEBUG TOGGLE ──────────────────────────────────────────
+  async function fetchDebugStatus() {
+    try {
+      const r = await fetch(`${API}/debug/status`);
+      const d = await r.json();
+      setDebugUI(d.debug_enabled, d.vnc_url);
+    } catch {}
+  }
+
+  function setDebugUI(enabled, vncUrl) {
+    debugActive = enabled;
+    const toggle = document.getElementById('debug-toggle');
+    const sub = document.getElementById('debug-sub');
+    const vncRow = document.getElementById('vnc-link-row');
+    const vncLink = document.getElementById('vnc-link');
+
+    toggle.checked = enabled;
+    sub.textContent = enabled ? 'aktiv — Browser sichtbar' : 'inaktiv';
+    vncRow.style.display = enabled ? 'block' : 'none';
+    if (vncUrl) {
+      vncLink.href = vncUrl;
+      vncLink.textContent = `→ ${vncUrl} ↗`;
+    }
+  }
+
+  document.getElementById('debug-toggle').addEventListener('change', async (e) => {
+    const enable = e.target.checked;
+    const endpoint = enable ? '/debug/enable' : '/debug/disable';
+    try {
+      const r = await fetch(`${API}${endpoint}`, { method: 'POST' });
+      const d = await r.json();
+      setDebugUI(d.debug_enabled ?? enable, d.vnc_url);
+      toast(enable ? 'Debug-Modus aktiviert' : 'Debug-Modus deaktiviert',
+            enable ? 'success' : 'info');
+    } catch (err) {
+      toast('Fehler: ' + err.message, 'error');
+      e.target.checked = !enable; // revert
+    }
+  });
+
+  // ── SESSION INIT ──────────────────────────────────────────
+  async function initSession() {
+    const site = document.getElementById('session-site').value;
+    const btn = document.getElementById('btn-session');
+
+    if (!debugActive) {
+      toast('Debug-Modus muss aktiv sein!', 'error');
+      return;
+    }
+
+    setLoading(btn, true);
+    try {
+      const r = await fetch(`${API}/session/init`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ site })
+      });
+      const d = await r.json();
+      if (r.ok) {
+        toast(`Browser geöffnet für ${site} — bitte einloggen`, 'success');
+      } else {
+        toast(d.detail || 'Fehler', 'error');
+      }
+    } catch (err) {
+      toast('Fehler: ' + err.message, 'error');
+    } finally {
+      setLoading(btn, false);
+    }
+  }
+
+  // ── DOWNLOAD ──────────────────────────────────────────────
+  async function triggerDownload() {
+    const site = document.getElementById('download-site').value;
+    const btn = document.getElementById('btn-download');
+
+    setLoading(btn, true);
+    toast(`Starte Download: ${site}...`, 'info');
+    try {
+      const r = await fetch(`${API}/download`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ site })
+      });
+      const d = await r.json();
+      if (r.ok) {
+        toast(`✓ Gespeichert: ${d.files?.[0]?.split('/').pop() || 'OK'}`, 'success');
+      } else {
+        toast(d.detail || 'Fehler', 'error');
+      }
+    } catch (err) {
+      toast('Fehler: ' + err.message, 'error');
+    } finally {
+      setLoading(btn, false);
+    }
+  }
+
+  // ── WEBSOCKET LOGS ────────────────────────────────────────
+  function connectWS() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const wsUrl = `${proto}://${location.host}/ws/logs`;
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      document.getElementById('ws-badge').textContent = 'connected';
+      document.getElementById('ws-badge').className = 'log-badge connected';
+      clearLogPlaceholder();
+    };
+
+    ws.onmessage = (e) => {
+      appendLog(e.data);
+    };
+
+    ws.onclose = () => {
+      document.getElementById('ws-badge').textContent = 'disconnected';
+      document.getElementById('ws-badge').className = 'log-badge';
+      setTimeout(connectWS, 3000); // reconnect
+    };
+
+    ws.onerror = () => ws.close();
+  }
+
+  let logEmpty = true;
+  function clearLogPlaceholder() {
+    if (logEmpty) {
+      document.getElementById('log-output').innerHTML = '';
+      logEmpty = false;
+    }
+  }
+
+  function appendLog(line) {
+    clearLogPlaceholder();
+    const out = document.getElementById('log-output');
+    const span = document.createElement('span');
+    span.className = 'log-line ' + classifyLine(line);
+    span.textContent = line;
+    out.appendChild(span);
+    out.appendChild(document.createTextNode('\n'));
+
+    // max 2000 lines
+    const lines = out.querySelectorAll('.log-line');
+    if (lines.length > 2000) lines[0].remove();
+
+    if (autoscroll) out.scrollTop = out.scrollHeight;
+  }
+
+  function classifyLine(line) {
+    if (line.includes('✅') || line.includes('gespeichert') || line.includes('abgeschlossen')) return 'success';
+    if (line.includes('❌') || line.includes('Error') || line.includes('error') || line.includes('500')) return 'error';
+    if (line.includes('⚠️') || line.includes('Timeout') || line.includes('nicht gefunden')) return 'warn';
+    if (line.includes('INFO:') && line.includes('HTTP')) return 'http';
+    if (line.includes('🚀') || line.includes('📖') || line.includes('📅') || line.includes('📥')) return 'highlight';
+    return 'info';
+  }
+
+  function clearLog() {
+    document.getElementById('log-output').innerHTML = '';
+    logEmpty = false;
+  }
+
+  function toggleAutoscroll() {
+    autoscroll = !autoscroll;
+    document.getElementById('autoscroll-btn').textContent = 'autoscroll ' + (autoscroll ? '✓' : '✗');
+  }
+
+  // ── TOAST ─────────────────────────────────────────────────
+  function toast(msg, type = 'info') {
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.textContent = msg;
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+  }
+
+  // ── LOADING STATE ─────────────────────────────────────────
+  function setLoading(btn, loading) {
+    btn.disabled = loading;
+    btn.classList.toggle('loading', loading);
+  }
+
+  // ── INIT ──────────────────────────────────────────────────
+  checkHealth();
+  setInterval(checkHealth, 15000);
+  fetchDebugStatus();
+  setInterval(fetchDebugStatus, 10000);
+  connectWS();
+</script>
+</body>
+</html>

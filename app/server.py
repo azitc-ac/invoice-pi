@@ -1,5 +1,5 @@
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from pydantic import BaseModel
 from typing import List
 from flows.freenet import run_freenet_download
@@ -7,8 +7,23 @@ from flows.netaachen import run_netaachen_download
 import os
 import subprocess
 import time
+import asyncio
+import glob
 
 app = FastAPI()
+
+# ============================================================
+# ADMIN UI
+# ============================================================
+
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+os.makedirs(STATIC_DIR, exist_ok=True)
+
+@app.get("/admin", response_class=HTMLResponse)
+def admin_ui():
+    admin_path = os.path.join(STATIC_DIR, "admin.html")
+    with open(admin_path, "r", encoding="utf-8") as f:
+        return f.read()
 
 # ============================================================
 # API KEY MIDDLEWARE
@@ -313,3 +328,51 @@ def debug_disable():
         "message": "Debug mode deactivated - VNC services stopped",
         "services": results
     }
+
+# ============================================================
+# WEBSOCKET - Live Log Stream
+# ============================================================
+
+def find_log_file() -> str | None:
+    """Findet die aktuelle fastapi-stdout Logdatei"""
+    matches = glob.glob("/var/log/supervisor/fastapi-stdout---supervisor-*.log")
+    return matches[0] if matches else None
+
+@app.websocket("/ws/logs")
+async def ws_logs(websocket: WebSocket):
+    await websocket.accept()
+    log_path = find_log_file()
+
+    if not log_path:
+        await websocket.send_text("⚠️  Log-Datei nicht gefunden")
+        await websocket.close()
+        return
+
+    try:
+        # Sende letzte 50 Zeilen als History
+        proc = await asyncio.create_subprocess_exec(
+            "tail", "-n", "50", log_path,
+            stdout=asyncio.subprocess.PIPE
+        )
+        stdout, _ = await proc.communicate()
+        for line in stdout.decode(errors="replace").splitlines():
+            await websocket.send_text(line)
+
+        # Dann live tail -f
+        proc = await asyncio.create_subprocess_exec(
+            "tail", "-f", "-n", "0", log_path,
+            stdout=asyncio.subprocess.PIPE
+        )
+
+        while True:
+            line = await proc.stdout.readline()
+            if not line:
+                await asyncio.sleep(0.1)
+                continue
+            await websocket.send_text(line.decode(errors="replace").rstrip())
+
+    except WebSocketDisconnect:
+        proc.terminate()
+    except Exception as e:
+        await websocket.send_text(f"❌ Log-Stream-Fehler: {e}")
+        await websocket.close()
