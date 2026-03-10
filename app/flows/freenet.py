@@ -14,30 +14,41 @@ GER_MONTHS = [
     "Juli","August","September","Oktober","November","Dezember"
 ]
 
+MONTH_MAP = {
+    "Januar": "01", "Februar": "02", "März": "03", "April": "04",
+    "Mai": "05", "Juni": "06", "Juli": "07", "August": "08",
+    "September": "09", "Oktober": "10", "November": "11", "Dezember": "12"
+}
+
 def pick_latest_month(page):
-    """Suche nach NEUESTEN Monatseintrag"""
+    """Suche nach NEUESTEM Monatseintrag, gibt Monatstext zurück (z.B. 'Februar 2026')"""
     month_regex = "(" + "|".join(GER_MONTHS) + r")\s+20\d{2}"
     tiles = page.locator(f"text=/{month_regex}/i")
     
     print(f"🔍 Suche Monate: {tiles.count()} gefunden")
     
     if tiles.count() > 0:
-        # Hole den Text des Monats
-        month_text = tiles.first.text_content()
+        month_text = tiles.first.text_content().strip()
         tiles.first.click()
         print(f"✅ Klicke auf neuesten Monat: {month_text}")
-        return True
+        return month_text  # z.B. "Februar 2026"
     
     print("❌ Keine Monate gefunden!")
-    return False
+    return None
+
+def month_text_to_date_str(month_text):
+    """'Februar 2026' → '2026-02'"""
+    try:
+        parts = month_text.strip().split()
+        month_num = MONTH_MAP.get(parts[0], "00")
+        return f"{parts[1]}-{month_num}"
+    except Exception:
+        return "0000-00"
 
 def click_top_pdf(page):
-    """Klicke auf obersten PDF-Link (nach Y-Position sortiert, wie im Selenium-Code)"""
-    import time
-    
+    """Klicke auf obersten PDF-Link (nach Y-Position sortiert)"""
     print(f"🔍 Suche PDF-Links...")
     
-    # Hole alle PDF-Links auf der Seite
     pdflinks = page.get_by_text("PDF")
     count = pdflinks.count()
     print(f"📝 Gefunden: {count} PDF-Links")
@@ -46,7 +57,6 @@ def click_top_pdf(page):
         print("❌ Keine PDF-Links gefunden!")
         return False
     
-    # Sammle alle Links mit ihren Y-Positionen
     pdf_positions = []
     for i in range(count):
         try:
@@ -66,7 +76,6 @@ def click_top_pdf(page):
         print("❌ Konnte Y-Positionen nicht bestimmen!")
         return False
     
-    # Sortiere nach Y-Position (oben = kleinste Y)
     top_pdf = sorted(pdf_positions, key=lambda x: x['y'])[0]
     print(f"✅ Wähle obersten PDF-Link (Y={top_pdf['y']})")
     
@@ -80,9 +89,10 @@ def click_top_pdf(page):
         print(f"❌ Fehler beim Click: {e}")
         return False
 
-def save_download(download, download_dir):
-    """Speichere Download"""
-    path = os.path.join(download_dir, download.suggested_filename)
+def save_download(download, download_dir, date_str):
+    """Speichere Download mit sprechendem Dateinamen"""
+    filename = f"Rechnung_Freenet_{date_str}.pdf"
+    path = os.path.join(download_dir, filename)
     download.save_as(path)
     print(f"✅ PDF gespeichert: {path}")
     return path
@@ -99,14 +109,13 @@ def run_freenet_download(headless=True):
     print(f"📁 User Data Dir: {PW_USERDATA}")
     
     with sync_playwright() as p:
-        # Nutze persistent_context für Session-Speicherung
         context = p.chromium.launch_persistent_context(
-            user_data_dir=PW_USERDATA,  # ← Session wird hier gespeichert!
+            user_data_dir=PW_USERDATA,
             headless=headless,
             args=[
                 "--no-sandbox",
                 "--disable-dev-shm-usage",
-                "--disable-blink-features=AutomationControlled",  # ← gegen Bot-Detection
+                "--disable-blink-features=AutomationControlled",
                 "--disable-setuid-sandbox",
             ]
         )
@@ -126,18 +135,20 @@ def run_freenet_download(headless=True):
         time.sleep(2)
         page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-01-loaded.png")
         
-        # Nutze gespeicherte Session
         print("\n✅ Nutze gespeicherte Session...")
         time.sleep(2)
         page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-02-loaded.png")
         
-        # Suche Monats-Eintrag
+        # Suche Monats-Eintrag, hole Monatstext für Dateinamen
         print("\n📅 Suche Monatseintrag...")
-        if not pick_latest_month(page):
+        month_text = pick_latest_month(page)
+        if not month_text:
             page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-error-no-month.png")
             raise RuntimeError("Konnte keinen Monatseintrag finden!")
         
-        # Lange warten auf Seite zu laden/expandieren
+        date_str = month_text_to_date_str(month_text)  # z.B. "2026-02"
+        print(f"📅 Datums-String für Dateinamen: {date_str}")
+        
         print("⏳ Warte 5 Sekunden auf Seite zu laden...")
         time.sleep(5)
         page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-03-month-selected.png")
@@ -150,7 +161,7 @@ def run_freenet_download(headless=True):
                 raise RuntimeError("Konnte keinen PDF-Link finden!")
         
         download = dl_info.value
-        out_file = save_download(download, DOWNLOAD_DIR)
+        out_file = save_download(download, DOWNLOAD_DIR, date_str)
         
         page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-04-downloaded.png")
         
@@ -162,9 +173,7 @@ def run_freenet_download(headless=True):
 if __name__ == "__main__":
     import sys
     
-    # Checke Kommandozeilen-Argument
-    headless = True  # Default: Headless-Modus
-    
+    headless = True
     if len(sys.argv) > 1 and sys.argv[1] == "--gui":
         headless = False
     

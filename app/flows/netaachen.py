@@ -1,4 +1,5 @@
 import os
+import re
 import time
 from playwright.sync_api import sync_playwright
 
@@ -6,10 +7,36 @@ DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "/downloads")
 PW_USERDATA = os.getenv("PW_USERDATA_NETAACHEN", "/pwdata/netaachen")
 INVOICE_URL = "https://meinekundenwelt.netcologne.de/"
 
-def click_top_pdf(page):
+GER_MONTHS = [
+    "Januar","Februar","März","April","Mai","Juni",
+    "Juli","August","September","Oktober","November","Dezember"
+]
+
+MONTH_MAP = {
+    "Januar": "01", "Februar": "02", "März": "03", "April": "04",
+    "Mai": "05", "Juni": "06", "Juli": "07", "August": "08",
+    "September": "09", "Oktober": "10", "November": "11", "Dezember": "12"
+}
+
+def month_text_to_date_str(month_text):
+    """'Februar 2026' → '2026-02'"""
+    try:
+        parts = month_text.strip().split()
+        month_num = MONTH_MAP.get(parts[0], "00")
+        return f"{parts[1]}-{month_num}"
+    except Exception:
+        return "0000-00"
+
+def extract_month_from_page(page_text):
+    """Extrahiere Monatstext aus Seiteninhalt, z.B. 'Februar 2026'"""
+    for monat in GER_MONTHS:
+        match = re.search(f"({monat} \\d{{4}})", page_text)
+        if match:
+            return match.group(1)
+    return None
+
+def click_top_pdf(page, date_str):
     """Klicke auf PDF-Link im Download-Dialog, gibt Dateipfad zurück"""
-    import time
-    
     print(f"📥 Suche PDF-Link...")
     
     try:
@@ -26,10 +53,11 @@ def click_top_pdf(page):
             pdf_link.click()
         
         download = dl_info.value
-        path = os.path.join(DOWNLOAD_DIR, download.suggested_filename)
+        filename = f"Rechnung_NetAachen_{date_str}.pdf"
+        path = os.path.join(DOWNLOAD_DIR, filename)
         download.save_as(path)
         print(f"✅ PDF gespeichert: {path}")
-        return path  # Dateipfad zurückgeben statt True
+        return path
         
     except Exception as e:
         print(f"❌ Fehler: {e}")
@@ -72,22 +100,21 @@ def run_netaachen_download(headless=True):
         except:
             print("⚠️  Konnte nicht klicken")
         
-        # Klicke auf "Aktuelle Rechnung"
+        # Klicke auf "Aktuelle Rechnung" und extrahiere Monatstext
         print("📄 Öffne aktuelle Rechnung...")
+        date_str = "0000-00"
         try:
             page.get_by_text("Aktuelle Rechnung").first.click()
             time.sleep(1)
             
-            import re
             page_text = page.content()
-            monate = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"]
-            
-            for monat in monate:
-                monat_match = re.search(f"{monat} \\d{{4}}", page_text)
-                if monat_match:
-                    print(f"✅ Öffne aktuelle Rechnung: {monat_match.group()}")
-                    break
-            
+            month_text = extract_month_from_page(page_text)
+            if month_text:
+                date_str = month_text_to_date_str(month_text)
+                print(f"✅ Öffne aktuelle Rechnung: {month_text} → {date_str}")
+            else:
+                print("⚠️  Konnte Monat nicht aus Seite extrahieren")
+
         except Exception as e:
             print(f"⚠️  Button nicht gefunden: {e}")
         
@@ -101,12 +128,12 @@ def run_netaachen_download(headless=True):
         
         # Suche PDF-Link und lade herunter
         print("\n📥 Suche PDF-Link im Dialog...")
-        path = click_top_pdf(page)
+        path = click_top_pdf(page, date_str)
 
         if path:
             page.screenshot(path=f"{DOWNLOAD_DIR}/netaachen-02-downloaded.png")
             context.close()
-            return [path]  # Liste zurückgeben, konsistent mit freenet.py
+            return [path]
         else:
             print("❌ Konnte PDF nicht finden!")
             page.screenshot(path=f"{DOWNLOAD_DIR}/netaachen-error.png")
