@@ -152,6 +152,94 @@ def download_file(req: DownloadRequest):
         media_type=media_type,
         filename=filename,  # originaler Dateiname bleibt erhalten
     )
+# ============================================================
+# API ENDPOINTS - Session Init (manueller Login)
+# ============================================================
+
+def _open_browser_for_login(site: str):
+    """
+    Öffnet Browser mit vorausgefüllten Credentials.
+    User muss nur noch auf Anmelden klicken.
+    Browser bleibt 5 Minuten offen → Session wird in pwdata gespeichert.
+    """
+    from playwright.sync_api import sync_playwright
+
+    configs = {
+        "freenet": {
+            "url": "https://www.freenet-mobilfunk.de/onlineservice/meine-rechnungen",
+            "userdata": os.getenv("PW_USERDATA_FREENET", "/pwdata/freenet"),
+            "username": os.getenv("FREENET_USERNAME", ""),
+            "password": os.getenv("FREENET_PASSWORD", ""),
+            "fill_username": "input#username",
+            "fill_password": "input#password",
+        },
+        "netaachen": {
+            "url": "https://sso.netcologne.de/cas/login?service=https://meinekundenwelt.netcologne.de/&mandant=na",
+            "userdata": os.getenv("PW_USERDATA_NETAACHEN", "/pwdata/netaachen"),
+            "username": os.getenv("NETAACHEN_USERNAME", ""),
+            "password": os.getenv("NETAACHEN_PASSWORD", ""),
+            "fill_username": "input#username",
+            "fill_password": "input#password",
+        },
+    }
+
+    cfg = configs[site]
+
+    with sync_playwright() as p:
+        context = p.chromium.launch_persistent_context(
+            user_data_dir=cfg["userdata"],
+            headless=False,
+            args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-setuid-sandbox"],
+        )
+        page = context.new_page()
+        print(f"📖 Öffne Login-Seite für {site}: {cfg['url']}")
+        page.goto(cfg["url"], wait_until="domcontentloaded")
+        time.sleep(2)
+
+        # Credentials vorausfüllen
+        try:
+            page.fill(cfg["fill_username"], cfg["username"])
+            page.fill(cfg["fill_password"], cfg["password"])
+            print(f"✅ Credentials vorausgefüllt für {site} — warte auf manuellen Login...")
+        except Exception as e:
+            print(f"⚠️  Konnte Credentials nicht einfüllen: {e}")
+
+        # 5 Minuten offen lassen für manuellen Login + Navigation
+        time.sleep(300)
+        print(f"⏰ Timeout erreicht, Browser wird geschlossen. Session gespeichert in {cfg['userdata']}")
+        context.close()
+
+
+@app.post("/session/init")
+def session_init(req: DownloadRequest):
+    """
+    Öffnet Browser im GUI-Modus mit vorausgefüllten Credentials.
+    User klickt manuell auf Anmelden → Session wird gespeichert.
+    Voraussetzung: Debug-Modus muss aktiv sein (POST /debug/enable).
+    """
+    import threading
+
+    if not check_debug_mode():
+        raise HTTPException(
+            status_code=400,
+            detail="Debug-Modus nicht aktiv. Erst POST /debug/enable aufrufen."
+        )
+
+    site = req.site.strip().lower()
+    if site not in ("freenet", "netaachen"):
+        raise HTTPException(status_code=400, detail="Unsupported site")
+
+    thread = threading.Thread(target=_open_browser_for_login, args=(site,), daemon=True)
+    thread.start()
+
+    return {
+        "status": "ok",
+        "site": site,
+        "message": "Browser geöffnet, Credentials vorausgefüllt. Bitte manuell auf Anmelden klicken.",
+        "vnc_url": "http://192.168.1.125:8081/vnc.html",
+        "timeout_minutes": 5,
+    }
+
 
 # ============================================================
 # API ENDPOINTS - Health & Debug
