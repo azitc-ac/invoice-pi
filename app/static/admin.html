@@ -561,6 +561,12 @@
     }
 
     setLoading(btn, true);
+
+    // noVNC Tab öffnen wenn Debug aktiv
+    if (debugActive && vncUrl) {
+      window.open(vncUrl, 'novnc');
+    }
+
     try {
       const r = await fetch(`${API}/session/init`, {
         method: 'POST',
