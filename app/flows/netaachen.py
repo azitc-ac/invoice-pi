@@ -55,7 +55,7 @@ def click_top_pdf(page, date_str):
         print(f"❌ Fehler: {e}")
         return None
 
-def run_netaachen_download(headless=True):
+def run_netaachen_download(headless=True, month_offset=0):
     """Download NetAachen mit gespeicherter Session"""
     
     print(f"\n🚀 Starte Playwright (headless={headless})")
@@ -99,25 +99,35 @@ def run_netaachen_download(headless=True):
         except:
             print("⚠️  Konnte nicht klicken")
         
-        # Klicke auf "Aktuelle Rechnung" und extrahiere Monatstext
-        print("📄 Öffne aktuelle Rechnung...")
+        # Klicke auf Rechnung (aktuell oder Vormonat je nach month_offset)
+        print(f"📄 Öffne Rechnung (offset={month_offset})...")
         date_str = "0000-00"
         try:
-            page.get_by_text("Aktuelle Rechnung").first.click()
+            if month_offset == 0:
+                page.get_by_text("Aktuelle Rechnung").first.click()
+            else:
+                month_regex = "(" + "|".join(GER_MONTHS) + r")\s+20\d{2}"
+                tiles = page.locator(f"text=/{month_regex}/i")
+                count = tiles.count()
+                print(f"🔍 Gefundene Monats-Tiles: {count}")
+                if count >= month_offset:
+                    tiles.nth(month_offset - 1).click()
+                else:
+                    print(f"⚠️  Vormonat nicht gefunden, nehme aktuell")
+                    page.get_by_text("Aktuelle Rechnung").first.click()
             time.sleep(1)
-            
+
             page_text = page.content()
             for monat in GER_MONTHS:
                 monat_match = re.search(f"({monat} \\d{{4}})", page_text)
                 if monat_match:
                     month_text = monat_match.group(1)
                     date_str = month_text_to_date_str(month_text)
-                    print(f"✅ Öffne aktuelle Rechnung: {month_text} → {date_str}")
+                    print(f"✅ Rechnung: {month_text} → {date_str}")
                     break
-            
+
         except Exception as e:
             print(f"⚠️  Button nicht gefunden: {e}")
-        
         # Klicke auf "Download"
         print("📥 Klicke Download...")
         try:

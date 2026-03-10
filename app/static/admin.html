@@ -449,13 +449,31 @@
       <div class="card">
         <div class="card-title">Rechnung herunterladen</div>
         <select id="download-site">
-          <option value="freenet">Freenet</option>
-          <option value="netaachen">NetAachen</option>
+          <option value="freenet">Freenet (aktuell)</option>
+          <option value="freenet-prev">Freenet (Vormonat)</option>
+          <option value="netaachen">NetAachen (aktuell)</option>
+          <option value="netaachen-prev">NetAachen (Vormonat)</option>
         </select>
         <button class="btn btn-primary" id="btn-download" onclick="triggerDownload()">
           <span class="btn-icon">⬇</span>
           <div class="spinner"></div>
           Jetzt herunterladen
+        </button>
+      </div>
+    </div>
+
+    <!-- WARTUNG -->
+    <div>
+      <div class="section-label">Wartung</div>
+      <div class="card">
+        <div class="card-title">Browser-Locks aufräumen</div>
+        <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:8px;">
+          Wenn ein Download hängt oder "profile in use" Fehler auftritt.
+        </div>
+        <button class="btn btn-secondary" id="btn-cleanup" onclick="cleanupLocks()">
+          <span class="btn-icon">🧹</span>
+          <div class="spinner"></div>
+          Locks aufräumen
         </button>
       </div>
     </div>
@@ -654,12 +672,21 @@
   }
 
   // ── DOWNLOAD ──────────────────────────────────────────────
+  function getPrevMonthLabel() {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return d.toLocaleString('de-DE', { month: 'long', year: 'numeric' });
+  }
+
   async function triggerDownload() {
-    const site = document.getElementById('download-site').value;
+    const val = document.getElementById('download-site').value;
+    const isPrev = val.endsWith('-prev');
+    const site = isPrev ? val.replace('-prev', '') : val;
     const btn = document.getElementById('btn-download');
 
     setLoading(btn, true);
-    toast(`Starte Download: ${site}...`, 'info');
+    const label = isPrev ? `${site} (${getPrevMonthLabel()})` : site;
+    toast(`Starte Download: ${label}...`, 'info');
 
     // noVNC Tab öffnen wenn Debug aktiv
     if (debugActive && vncUrl) {
@@ -667,14 +694,37 @@
     }
 
     try {
+      const body = isPrev ? { site, month_offset: 1 } : { site };
       const r = await fetch(`${API}/download`, {
         method: 'POST',
         headers: authHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ site })
+        body: JSON.stringify(body)
       });
       const d = await r.json();
       if (r.ok) {
         toast(`✓ Gespeichert: ${d.files?.[0]?.split('/').pop() || 'OK'}`, 'success');
+      } else {
+        toast(d.detail || 'Fehler', 'error');
+      }
+    } catch (err) {
+      toast('Fehler: ' + err.message, 'error');
+    } finally {
+      setLoading(btn, false);
+    }
+  }
+
+  // ── CLEANUP LOCKS ─────────────────────────────────────────
+  async function cleanupLocks() {
+    const btn = document.getElementById('btn-cleanup');
+    setLoading(btn, true);
+    try {
+      const r = await fetch(`${API}/cleanup/locks`, {
+        method: 'POST',
+        headers: authHeaders()
+      });
+      const d = await r.json();
+      if (r.ok) {
+        toast(`🧹 ${d.message || 'Locks aufgeräumt'}`, 'success');
       } else {
         toast(d.detail || 'Fehler', 'error');
       }

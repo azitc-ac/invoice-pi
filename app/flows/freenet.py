@@ -20,20 +20,22 @@ MONTH_MAP = {
     "September": "09", "Oktober": "10", "November": "11", "Dezember": "12"
 }
 
-def pick_latest_month(page):
-    """Suche nach NEUESTEM Monatseintrag, gibt Monatstext zurück (z.B. 'Februar 2026')"""
+def pick_month(page, month_offset=0):
+    """Wählt Monatseintrag aus. month_offset=0 → aktuellster, 1 → Vormonat usw."""
     month_regex = "(" + "|".join(GER_MONTHS) + r")\s+20\d{2}"
     tiles = page.locator(f"text=/{month_regex}/i")
-    
-    print(f"🔍 Suche Monate: {tiles.count()} gefunden")
-    
-    if tiles.count() > 0:
-        month_text = tiles.first.text_content().strip()
-        tiles.first.click()
-        print(f"✅ Klicke auf neuesten Monat: {month_text}")
+
+    count = tiles.count()
+    print(f"🔍 Suche Monate: {count} gefunden, offset={month_offset}")
+
+    if count > month_offset:
+        tile = tiles.nth(month_offset)
+        month_text = tile.text_content().strip()
+        tile.click()
+        print(f"✅ Klicke auf Monat [{month_offset}]: {month_text}")
         return month_text  # z.B. "Februar 2026"
-    
-    print("❌ Keine Monate gefunden!")
+
+    print(f"❌ Monat mit offset={month_offset} nicht gefunden (nur {count} vorhanden)!")
     return None
 
 def month_text_to_date_str(month_text):
@@ -97,7 +99,7 @@ def save_download(download, download_dir, date_str):
     print(f"✅ PDF gespeichert: {path}")
     return path
 
-def run_freenet_download(headless=True):
+def run_freenet_download(headless=True, month_offset=0):
     """
     Download Freenet Rechnungen via Playwright
     
@@ -148,7 +150,7 @@ def run_freenet_download(headless=True):
         
         # Suche Monats-Eintrag, hole Monatstext für Dateinamen
         print("\n📅 Suche Monatseintrag...")
-        month_text = pick_latest_month(page)
+        month_text = pick_month(page, month_offset=month_offset)
         if not month_text:
             page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-error-no-month.png")
             raise RuntimeError("Konnte keinen Monatseintrag finden!")

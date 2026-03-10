@@ -58,6 +58,40 @@ async def api_key_middleware(request: Request, call_next):
 
 class DownloadRequest(BaseModel):
     site: str
+    month_offset: int = 0  # 0 = aktuell, 1 = Vormonat
+
+# ============================================================
+# API ENDPOINT - Cleanup Locks
+# ============================================================
+
+PW_USERDIRS = {
+    "freenet": os.getenv("PW_USERDATA_FREENET", "/pwdata/freenet"),
+    "netaachen": os.getenv("PW_USERDATA_NETAACHEN", "/pwdata/netaachen"),
+}
+LOCK_FILES = ["SingletonLock", "SingletonCookie", "SingletonSocket"]
+
+@app.post("/cleanup/locks")
+def cleanup_locks():
+    """Entfernt stale Chromium Lock-Dateien und killt verwaiste Prozesse"""
+    removed = []
+    for site, userdir in PW_USERDIRS.items():
+        for lf in LOCK_FILES:
+            path = os.path.join(userdir, lf)
+            if os.path.exists(path):
+                os.remove(path)
+                removed.append(path)
+                print(f"🧹 Lock entfernt: {path}")
+
+    # Verwaiste Chromium-Prozesse killen
+    try:
+        subprocess.run(["pkill", "-f", "chromium"], capture_output=True)
+        print("🧹 Chromium-Prozesse beendet")
+    except Exception:
+        pass
+
+    msg = f"{len(removed)} Lock(s) entfernt" if removed else "Keine Locks gefunden"
+    return {"status": "ok", "message": msg, "removed": removed}
+
 
 # ============================================================
 # DEBUG MODE - VNC Enable/Disable
@@ -133,10 +167,10 @@ def download(req: DownloadRequest):
     """Trigger Download, gibt Dateipfade zurück (lokale Speicherung)"""
     site = req.site.strip().lower()
     if site == "freenet":
-        files = run_freenet_download(headless=is_headless())
+        files = run_freenet_download(headless=is_headless(), month_offset=req.month_offset)
         return {"status": "ok", "site": "freenet", "files": files}
     elif site == "netaachen":
-        files = run_netaachen_download(headless=is_headless())
+        files = run_netaachen_download(headless=is_headless(), month_offset=req.month_offset)
         return {"status": "ok", "site": "netaachen", "files": files}
     else:
         raise HTTPException(status_code=400, detail="Unsupported site")
