@@ -1,14 +1,37 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 from typing import List
 from flows.freenet import run_freenet_download
 from flows.netaachen import run_netaachen_download
-from fastapi.responses import FileResponse
 import os
 import subprocess
 import time
 
 app = FastAPI()
+
+# ============================================================
+# API KEY MIDDLEWARE
+# ============================================================
+
+API_KEY = os.getenv("API_KEY", "")
+
+@app.middleware("http")
+async def api_key_middleware(request: Request, call_next):
+    # Health-Endpoint ist immer offen (z.B. für App Proxy Health-Check)
+    if request.url.path == "/health":
+        return await call_next(request)
+
+    # Kein API_KEY konfiguriert → Warnung, aber durchlassen (Dev-Modus)
+    if not API_KEY:
+        return await call_next(request)
+
+    key = request.headers.get("X-API-Key", "")
+    if key != API_KEY:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+
+    return await call_next(request)
+
 
 class DownloadRequest(BaseModel):
     site: str
@@ -63,7 +86,7 @@ def stop_vnc_services():
                 timeout=5
             )
             time.sleep(0.5)
-            results[service] = not get_supervisor_status(service)  # True wenn erfolgreich gestoppt
+            results[service] = not get_supervisor_status(service)
         except Exception as e:
             results[service] = f"Error: {e}"
     
@@ -79,6 +102,7 @@ def check_debug_mode():
 
 @app.post("/download")
 def download(req: DownloadRequest):
+    """Trigger Download, gibt Dateipfade zurück (lokale Speicherung)"""
     site = req.site.strip().lower()
     if site == "freenet":
         files = run_freenet_download()
@@ -91,6 +115,7 @@ def download(req: DownloadRequest):
 
 @app.post("/download/file")
 def download_file(req: DownloadRequest):
+    """Trigger Download und liefere die PDF-Datei direkt zurück (für Power Automate)"""
     site = req.site.strip().lower()
     if site == "freenet":
         files: List[str] = run_freenet_download()
@@ -104,7 +129,7 @@ def download_file(req: DownloadRequest):
     
     path = files[0]
     if not os.path.isfile(path):
-        raise HTTPException(status_code=500, detail="Downloaded file not found")
+        raise HTTPException(status_code=500, detail=f"Downloaded file not found: {path}")
     
     filename = os.path.basename(path)
     
@@ -118,7 +143,7 @@ def download_file(req: DownloadRequest):
     return FileResponse(
         path=path,
         media_type=media_type,
-        filename=filename,
+        filename=filename,  # originaler Dateiname bleibt erhalten
     )
 
 # ============================================================
@@ -160,7 +185,6 @@ def debug_enable():
     print("🚀 Starting VNC services...")
     results = start_vnc_services()
     
-    # Warte etwas bis alles hochgefahren ist
     time.sleep(3)
     
     is_enabled = check_debug_mode()

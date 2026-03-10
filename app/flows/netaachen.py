@@ -7,7 +7,7 @@ PW_USERDATA = os.getenv("PW_USERDATA_NETAACHEN", "/pwdata/netaachen")
 INVOICE_URL = "https://meinekundenwelt.netcologne.de/"
 
 def click_top_pdf(page):
-    """Klicke auf PDF-Link im Download-Dialog"""
+    """Klicke auf PDF-Link im Download-Dialog, gibt Dateipfad zurück"""
     import time
     
     print(f"📥 Suche PDF-Link...")
@@ -29,11 +29,11 @@ def click_top_pdf(page):
         path = os.path.join(DOWNLOAD_DIR, download.suggested_filename)
         download.save_as(path)
         print(f"✅ PDF gespeichert: {path}")
-        return True
+        return path  # Dateipfad zurückgeben statt True
         
     except Exception as e:
         print(f"❌ Fehler: {e}")
-        return False
+        return None
 
 def run_netaachen_download(headless=True):
     """Download NetAachen mit gespeicherter Session"""
@@ -42,7 +42,6 @@ def run_netaachen_download(headless=True):
     print(f"📁 User Data Dir: {PW_USERDATA}")
     
     with sync_playwright() as p:
-        # Nutze persistent_context für gespeicherte Session
         context = p.chromium.launch_persistent_context(
             user_data_dir=PW_USERDATA,
             headless=headless,
@@ -79,7 +78,6 @@ def run_netaachen_download(headless=True):
             page.get_by_text("Aktuelle Rechnung").first.click()
             time.sleep(1)
             
-            # Nach dem Click - suche nach Monatsinformation auf der Seite
             import re
             page_text = page.content()
             monate = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"]
@@ -103,10 +101,12 @@ def run_netaachen_download(headless=True):
         
         # Suche PDF-Link und lade herunter
         print("\n📥 Suche PDF-Link im Dialog...")
-        if click_top_pdf(page):
+        path = click_top_pdf(page)
+
+        if path:
             page.screenshot(path=f"{DOWNLOAD_DIR}/netaachen-02-downloaded.png")
             context.close()
-            return True
+            return [path]  # Liste zurückgeben, konsistent mit freenet.py
         else:
             print("❌ Konnte PDF nicht finden!")
             page.screenshot(path=f"{DOWNLOAD_DIR}/netaachen-error.png")
