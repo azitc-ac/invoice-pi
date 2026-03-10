@@ -474,14 +474,15 @@
   <div class="log-panel">
     <div class="log-header">
       <div class="log-title">fastapi-stdout</div>
-      <div class="log-badge" id="ws-badge">disconnected</div>
+      <div class="log-badge" id="ws-badge">off</div>
       <div class="log-controls">
         <button class="icon-btn" onclick="clearLog()">clear</button>
         <button class="icon-btn" id="autoscroll-btn" onclick="toggleAutoscroll()">autoscroll ✓</button>
+        <button class="icon-btn" id="log-toggle-btn" onclick="toggleLogging()">logging ✗</button>
       </div>
     </div>
     <div id="log-output">
-      <span class="log-empty">Warte auf Log-Stream...</span>
+      <span class="log-empty">Logging deaktiviert — oben einschalten.</span>
     </div>
   </div>
 </main>
@@ -612,10 +613,23 @@
   }
 
   // ── WEBSOCKET LOGS ────────────────────────────────────────
+  let loggingEnabled = false;
+
+  function toggleLogging() {
+    if (loggingEnabled) {
+      disconnectWS();
+    } else {
+      connectWS();
+    }
+  }
+
   function connectWS() {
+    if (ws && ws.readyState < 2) return; // already open/connecting
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const wsUrl = `${proto}://${location.host}/ws/logs`;
     ws = new WebSocket(wsUrl);
+    loggingEnabled = true;
+    document.getElementById('log-toggle-btn').textContent = 'logging ✓';
 
     ws.onopen = () => {
       document.getElementById('ws-badge').textContent = 'connected';
@@ -628,12 +642,20 @@
     };
 
     ws.onclose = () => {
-      document.getElementById('ws-badge').textContent = 'disconnected';
+      document.getElementById('ws-badge').textContent = loggingEnabled ? 'reconnecting...' : 'off';
       document.getElementById('ws-badge').className = 'log-badge';
-      setTimeout(connectWS, 3000); // reconnect
+      if (loggingEnabled) setTimeout(connectWS, 3000); // reconnect only if still enabled
     };
 
     ws.onerror = () => ws.close();
+  }
+
+  function disconnectWS() {
+    loggingEnabled = false;
+    document.getElementById('log-toggle-btn').textContent = 'logging ✗';
+    document.getElementById('ws-badge').textContent = 'off';
+    document.getElementById('ws-badge').className = 'log-badge';
+    if (ws) { ws.close(); ws = null; }
   }
 
   let logEmpty = true;
@@ -699,7 +721,7 @@
   setInterval(checkHealth, 15000);
   fetchDebugStatus();
   setInterval(fetchDebugStatus, 10000);
-  connectWS();
+  // Logging + Debug off by default — user enables manually
 </script>
 </body>
 </html>
