@@ -27,16 +27,8 @@ def month_text_to_date_str(month_text):
     except Exception:
         return "0000-00"
 
-def extract_month_from_page(page_text):
-    """Extrahiere Monatstext aus Seiteninhalt, z.B. 'Februar 2026'"""
-    for monat in GER_MONTHS:
-        match = re.search(f"({monat} \\d{{4}})", page_text)
-        if match:
-            return match.group(1)
-    return None
-
 def click_top_pdf(page, date_str):
-    """Klicke auf PDF-Link im Download-Dialog, gibt Dateipfad zurück"""
+    """Klicke auf PDF-Link im Download-Dialog"""
     print(f"📥 Suche PDF-Link...")
     
     try:
@@ -108,13 +100,14 @@ def run_netaachen_download(headless=True):
             time.sleep(1)
             
             page_text = page.content()
-            month_text = extract_month_from_page(page_text)
-            if month_text:
-                date_str = month_text_to_date_str(month_text)
-                print(f"✅ Öffne aktuelle Rechnung: {month_text} → {date_str}")
-            else:
-                print("⚠️  Konnte Monat nicht aus Seite extrahieren")
-
+            for monat in GER_MONTHS:
+                monat_match = re.search(f"({monat} \\d{{4}})", page_text)
+                if monat_match:
+                    month_text = monat_match.group(1)
+                    date_str = month_text_to_date_str(month_text)
+                    print(f"✅ Öffne aktuelle Rechnung: {month_text} → {date_str}")
+                    break
+            
         except Exception as e:
             print(f"⚠️  Button nicht gefunden: {e}")
         
