@@ -1,19 +1,55 @@
+version: '3.8'
+
 services:
   invoices:
     build: .
     container_name: invoice-downloader
-    env_file:
-      - ./.env
-    environment:
-      DOWNLOAD_DIR: "${DOWNLOAD_DIR:-/downloads}"
-      PW_USERDATA_FREENET: "${PW_USERDATA_FREENET:-/pwdata/freenet}"
-      PW_USERDATA_NETAACHEN: "${PW_USERDATA_NETAACHEN:-/pwdata/netaachen}"
-      HEADLESS: "${HEADLESS:-true}"
-      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
-      PORT: "${PORT:-8080}"
-    volumes:
-      - ./app:/app
-      - ./downloads:/downloads
-      - ./pwdata:/pwdata
+    
+    # Ports
     ports:
-      - "${PORT:-8080}:8080"
+      - "8000:8000"      # FastAPI Server
+      - "8081:8080"      # noVNC Web Interface (Browser)
+      - "5900:5900"      # VNC Port
+    
+    # Environment
+    environment:
+      - HEADLESS=false           # Browser SICHTBAR (wichtig!)
+      - DISPLAY=:0               # X11 Display
+      - LOG_LEVEL=DEBUG
+    
+    # Volumes für Persistent Data
+    volumes:
+      - ./app:/app                    # Source Code
+      - ./downloads:/downloads        # Downloaded Invoices
+      - ./pwdata:/pwdata              # Browser Cookies & Sessions
+      - /dev/shm:/dev/shm             # Shared Memory für Browser
+    
+    # Env File für Credentials
+    env_file: .env
+    
+    # Resource Limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '1'
+          memory: 512M
+    
+    # Health Check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+   
+    
+    # Network
+    networks:
+      - invoice-network
+
+networks:
+  invoice-network:
+    driver: bridge

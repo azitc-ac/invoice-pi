@@ -1,46 +1,135 @@
 import os
+import time
 from playwright.sync_api import sync_playwright
-from common import (
-    log, launch_persistent, accept_cookies_easy, wait_network_idle, save_download
-)
 
-NET_USER = os.getenv("NETAACHEN_USERNAME")
-NET_PASS = os.getenv("NETAACHEN_PASSWORD")
 DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "/downloads")
 PW_USERDATA = os.getenv("PW_USERDATA_NETAACHEN", "/pwdata/netaachen")
+INVOICE_URL = "https://meinekundenwelt.netcologne.de/"
 
-LOGIN_URL = "https://sso.netcologne.de/cas/login?service=https://meinekundenwelt.netcologne.de/&mandant=na"
-
-def run_netaachen_download(download_dir: str = DOWNLOAD_DIR):
-    with sync_playwright() as p:
-        ctx = launch_persistent(p, PW_USERDATA)
-        page = ctx.new_page()
-
-        log(f"Gehe zu {LOGIN_URL}")
-        page.goto(LOGIN_URL, wait_until="domcontentloaded")
-
-        page.fill("#username", NET_USER)
-        page.fill("#password", NET_PASS)
-        page.locator("input[type='submit'][value='Anmelden']").click()
-
-        wait_network_idle(page)
-        accept_cookies_easy(page)
-
-        # Nutze .first statt exact=False um strict mode zu vermeiden
-        page.get_by_text("Meine Rechnungen").first.click(timeout=20000)
-        wait_network_idle(page)
-        page.get_by_text("Aktuelle Rechnung").first.click(timeout=20000)
-        wait_network_idle(page)
-        page.get_by_text("Download").first.click(timeout=20000)
-
-        modal = page.locator("[data-e2e='modal-billing-download-landline']")
-        if not modal.count():
-            modal = page.locator("div[role='dialog']")
-
+def click_top_pdf(page):
+    """Klicke auf PDF-Link im Download-Dialog"""
+    import time
+    
+    print(f"📥 Suche PDF-Link...")
+    
+    try:
+        # Warte auf Dialog
+        page.locator("div[data-e2e='modal-billing-download-landline']").wait_for(timeout=5000)
+        print("✅ Download-Dialog gefunden")
+        
+        # Klicke auf PDF
+        pdf_link = page.locator("div[data-e2e='modal-billing-download-landline'] >> text=PDF").first
+        pdf_link.scroll_into_view_if_needed()
+        time.sleep(1)
+        
         with page.expect_download() as dl_info:
-            modal.get_by_text("PDF", exact=False).first.click()
+            pdf_link.click()
+        
         download = dl_info.value
-        out_file = save_download(download, download_dir)
+        path = os.path.join(DOWNLOAD_DIR, download.suggested_filename)
+        download.save_as(path)
+        print(f"✅ PDF gespeichert: {path}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Fehler: {e}")
+        return False
 
-        ctx.close()
-        return [out_file]
+def run_netaachen_download(headless=True):
+    """Download NetAachen mit gespeicherter Session"""
+    
+    print(f"\n🚀 Starte Playwright (headless={headless})")
+    print(f"📁 User Data Dir: {PW_USERDATA}")
+    
+    with sync_playwright() as p:
+        # Nutze persistent_context für gespeicherte Session
+        context = p.chromium.launch_persistent_context(
+            user_data_dir=PW_USERDATA,
+            headless=headless,
+            args=[
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-blink-features=AutomationControlled",
+                "--disable-setuid-sandbox",
+            ]
+        )
+        
+        page = context.new_page()
+        
+        print(f"📖 Gehe zu {INVOICE_URL}")
+        page.goto(INVOICE_URL, wait_until="domcontentloaded")
+        
+        time.sleep(1)
+        page.screenshot(path=f"{DOWNLOAD_DIR}/netaachen-01-loaded.png")
+        
+        print("✅ Nutze gespeicherte Session...")
+        time.sleep(1)
+        
+        # Navigiere zu "Meine Rechnungen"
+        print("\n📋 Navigiere zu Meine Rechnungen...")
+        try:
+            page.get_by_text("Meine Rechnungen").first.click()
+            time.sleep(1)
+        except:
+            print("⚠️  Konnte nicht klicken")
+        
+        # Klicke auf "Aktuelle Rechnung"
+        print("📄 Öffne aktuelle Rechnung...")
+        try:
+            page.get_by_text("Aktuelle Rechnung").first.click()
+            time.sleep(1)
+            
+            # Nach dem Click - suche nach Monatsinformation auf der Seite
+            import re
+            page_text = page.content()
+            monate = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"]
+            
+            for monat in monate:
+                monat_match = re.search(f"{monat} \\d{{4}}", page_text)
+                if monat_match:
+                    print(f"✅ Öffne aktuelle Rechnung: {monat_match.group()}")
+                    break
+            
+        except Exception as e:
+            print(f"⚠️  Button nicht gefunden: {e}")
+        
+        # Klicke auf "Download"
+        print("📥 Klicke Download...")
+        try:
+            page.get_by_text("Download").first.click()
+            time.sleep(1)
+        except:
+            print("⚠️  Download-Button nicht gefunden")
+        
+        # Suche PDF-Link und lade herunter
+        print("\n📥 Suche PDF-Link im Dialog...")
+        if click_top_pdf(page):
+            page.screenshot(path=f"{DOWNLOAD_DIR}/netaachen-02-downloaded.png")
+            context.close()
+            return True
+        else:
+            print("❌ Konnte PDF nicht finden!")
+            page.screenshot(path=f"{DOWNLOAD_DIR}/netaachen-error.png")
+            context.close()
+            raise RuntimeError("PDF-Download fehlgeschlagen!")
+
+
+if __name__ == "__main__":
+    import sys
+    
+    headless = True
+    if len(sys.argv) > 1 and sys.argv[1] == "--gui":
+        headless = False
+    
+    print("\n" + "="*60)
+    if headless:
+        print("🤖 HEADLESS-MODUS")
+    else:
+        print("🖥️  GUI-MODUS")
+    print("="*60)
+    
+    run_netaachen_download(headless=headless)
+    
+    print("\n" + "="*60)
+    print("✅ Download abgeschlossen!")
+    print("="*60)
