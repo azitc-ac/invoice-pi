@@ -40,11 +40,12 @@ def is_headless() -> bool:
 
 @app.middleware("http")
 async def api_key_middleware(request: Request, call_next):
-    # Health-Endpoint ist immer offen (z.B. für App Proxy Health-Check)
-    if request.url.path == "/health":
+    # Immer offen: Health-Check + Admin UI selbst (Login-Dialog ist in der Seite)
+    # WebSocket Auth läuft über Query-Parameter
+    if request.url.path in ("/health", "/admin", "/ws/logs"):
         return await call_next(request)
 
-    # Kein API_KEY konfiguriert → Warnung, aber durchlassen (Dev-Modus)
+    # Kein API_KEY konfiguriert → durchlassen (Dev-Modus)
     if not API_KEY:
         return await call_next(request)
 
