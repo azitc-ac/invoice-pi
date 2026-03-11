@@ -223,15 +223,21 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
             print("✅ Anmelden geklickt — warte auf Redirect...")
 
             # Warten auf erfolgreichen Login
-            deadline = time.time() + 30
+            deadline = time.time() + 45
+            last_url = ""
             while time.time() < deadline:
                 url = driver.current_url
+                if url != last_url:
+                    print(f"📍 URL: {url}")
+                    last_url = url
                 if not any(x in url.lower() for x in ["signin", "login", "authenticate", "403", "forbidden"]):
                     print(f"✅ Eingeloggt! URL: {url}")
                     break
-                time.sleep(0.5)
+                if "403" in url or "forbidden" in url.lower():
+                    raise RuntimeError(f"403 Forbidden — WAF blockt (navigator.webdriver=true)")
+                time.sleep(1)
             else:
-                raise RuntimeError(f"Login-Timeout. URL: {driver.current_url}")
+                raise RuntimeError(f"Login-Timeout nach 45s. Letzte URL: {driver.current_url}")
 
             time.sleep(2)
         else:
