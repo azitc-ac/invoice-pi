@@ -70,6 +70,7 @@ PW_USERDIRS = {
     "netaachen": os.getenv("PW_USERDATA_NETAACHEN", "/pwdata/netaachen"),
     "lexware": os.getenv("PW_USERDATA_LEXWARE", "/pwdata/lexware"),
 }
+FF_PROFILE_LEXWARE = os.getenv("FF_PROFILE_LEXWARE", "/pwdata/lexware-real")
 LOCK_FILES = ["SingletonLock", "SingletonCookie", "SingletonSocket"]
 
 @app.post("/cleanup/locks")
