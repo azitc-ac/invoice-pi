@@ -124,7 +124,7 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v13")
+    print(f"\n🚀 Starte Lexware Upload v14")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
@@ -142,6 +142,8 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
         f"--remote-debugging-port={CDP_PORT}",
         f"--user-data-dir={FF_PROFILE}",
         "--window-size=1280,900",
+        "--disable-save-password-bubble",
+        "--password-store=basic",
         f"--display={os.getenv('DISPLAY', ':0')}",
         LEXWARE_LOGIN_URL,
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -238,7 +240,16 @@ Array.from(document.querySelectorAll('button, a, [role="button"]'))
             else:
                 raise RuntimeError(f"Login-Timeout. URL: {page.url}")
 
-            time.sleep(3)
+            time.sleep(2)
+            # "Save password?" Dialog wegklicken
+            try:
+                no_thanks = page.locator("button:has-text('No thanks'), button:has-text('Never'), button:has-text('Nein')").first
+                if no_thanks.is_visible(timeout=2000):
+                    no_thanks.click()
+                    print("✅ Passwort-Dialog geschlossen")
+            except Exception:
+                pass
+            time.sleep(1)
         else:
             print("✅ Bereits eingeloggt")
 
