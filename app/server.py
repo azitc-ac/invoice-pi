@@ -135,7 +135,19 @@ def stop_vnc_services():
     return results
 
 def check_debug_mode():
-    return get_supervisor_status("novnc") and get_supervisor_status("xvfb")
+    # Debug-Modus immer aktiv — startet Xvfb/VNC falls nötig
+    _ensure_display_services()
+    return True
+
+def _ensure_display_services():
+    """Startet Xvfb, fluxbox, x11vnc und noVNC falls nicht aktiv."""
+    for svc in ["xvfb", "fluxbox", "x11vnc", "novnc"]:
+        if not get_supervisor_status(svc):
+            try:
+                import subprocess
+                subprocess.run(f"supervisorctl start {svc}", shell=True, capture_output=True)
+            except Exception:
+                pass
 
 def get_vnc_url(request: Request) -> str:
     host = request.headers.get("host", "localhost").split(":")[0]
