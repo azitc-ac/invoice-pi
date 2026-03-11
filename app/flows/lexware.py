@@ -1,37 +1,43 @@
 import os
 import time
 import shutil
+import subprocess
 from pathlib import Path
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
+from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
 LW_USER      = os.getenv("LEXWARE_USERNAME", "")
 LW_PASS      = os.getenv("LEXWARE_PASSWORD", "")
-CHROMIUM_BIN = "/usr/bin/chromium-browser"
-CHROMEDRIVER = "/usr/bin/chromedriver"
+FF_PROFILE   = os.getenv("FF_PROFILE_LEXWARE", "/pwdata/lexware-ff")
+CHROMIUM_BIN = "/ms-playwright/chromium-1208/chrome-linux/chrome"
+CDP_PORT     = 9222
 
 LEXWARE_LOGIN_URL   = "https://app.lexware.de"
 LEXWARE_VOUCHER_URL = "https://app.lexware.de/vouchers#!/VoucherList/?filter=accounting&vouchereditoropen=true"
 
+TIMEOUT_NAV     = 30_000
+TIMEOUT_ELEMENT = 15_000
 
-def _wait_for_element(driver, by, selector, timeout=25):
-    deadline = time.time() + timeout
-    while time.time() < deadline:
+
+def _fresh_profile():
+    if Path(FF_PROFILE).exists():
+        shutil.rmtree(FF_PROFILE)
+    Path(FF_PROFILE).mkdir(parents=True, exist_ok=True)
+    print(f"🧹 Frisches Profil: {FF_PROFILE}")
+
+
+def _find(page, selectors, timeout=10_000):
+    for sel in selectors:
         try:
-            els = driver.find_elements(by, selector)
-            for el in els:
-                if el.is_displayed() and el.is_enabled():
-                    return el
+            loc = page.locator(sel).first
+            loc.wait_for(state="visible", timeout=timeout)
+            if loc.is_visible():
+                return loc
         except Exception:
-            pass
-        time.sleep(0.2)
-    raise RuntimeError(f"Element nicht gefunden: {selector}")
+            continue
+    return None
 
 
-def _dismiss_cookie_banner(driver):
-    print("🍪 Suche Cookie-Banner...")
+def _dismiss_cookie_banner(page):
     js = """
 function findAndClick(root) {
     var keywords = ['alle akzept', 'akzept', 'zustimm', 'einverstanden', 'accept all', 'accept'];
@@ -53,10 +59,11 @@ function findAndClick(root) {
 }
 return findAndClick(document);
 """
+    print("🍪 Suche Cookie-Banner...")
     deadline = time.time() + 10
     while time.time() < deadline:
         try:
-            if driver.execute_script(js):
+            if page.evaluate(js):
                 print("✅ Cookie-Banner geschlossen")
                 time.sleep(0.6)
                 return
@@ -66,50 +73,9 @@ return findAndClick(document);
     print("ℹ️  Kein Cookie-Banner gefunden")
 
 
-def _get_file_input(driver, timeout=20):
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        try:
-            els = driver.find_elements(By.CSS_SELECTOR, "input[type='file']")
-            if els:
-                return els[0]
-        except Exception:
-            pass
-        time.sleep(0.3)
-    # Shadow DOM fallback
-    js = """
-var results = [];
-function walk(root) {
-    if (!root || !root.querySelectorAll) return;
-    var inputs = root.querySelectorAll('input[type="file"]');
-    for (var i = 0; i < inputs.length; i++) { results.push(inputs[i]); }
-    var all = root.querySelectorAll('*');
-    for (var j = 0; j < all.length; j++) {
-        if (all[j].shadowRoot) walk(all[j].shadowRoot);
-    }
-}
-walk(document);
-return results;
-"""
-    els = driver.execute_script(js)
-    if els:
-        return els[0]
-    return None
-
-
-def _make_file_input_visible(driver, el):
-    driver.execute_script("""
-var el = arguments[0];
-el.style.cssText = 'display:block!important;visibility:visible!important;opacity:1!important;width:100px!important;height:30px!important;';
-el.removeAttribute('hidden');
-el.removeAttribute('aria-hidden');
-el.removeAttribute('disabled');
-""", el)
-
-
-def _get_badge_count(driver):
+def _get_badge_count(page):
     try:
-        return driver.execute_script("""
+        return page.evaluate("""
 var el = document.querySelector("span.grld-bs-badge-info");
 if (el) return parseInt(el.textContent.trim(), 10);
 return null;
@@ -126,76 +92,84 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v6")
+    print(f"\n🚀 Starte Lexware Upload v7")
     print(f"📄 Datei: {abs_path}")
 
-    options = Options()
-    options.binary_location = CHROMIUM_BIN
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1280,900")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option("useAutomationExtension", False)
+    _fresh_profile()
 
-    service = Service(executable_path=CHROMEDRIVER, log_path="/tmp/chromedriver.log")
+    # Chromium manuell starten mit Anti-Detection Flags + CDP
+    subprocess.run("pkill -f 'chrome-linux/chrome' 2>/dev/null", shell=True)
+    time.sleep(1)
 
-    print("🌐 Starte Chromium via Selenium...")
-    driver = webdriver.Chrome(service=service, options=options)
-    driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+    print(f"🌐 Starte Chromium mit CDP auf Port {CDP_PORT}...")
+    proc = subprocess.Popen([
+        CHROMIUM_BIN,
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-blink-features=AutomationControlled",
+        f"--remote-debugging-port={CDP_PORT}",
+        f"--user-data-dir={FF_PROFILE}",
+        "--window-size=1280,900",
+        f"--display={os.getenv('DISPLAY', ':0')}",
+        LEXWARE_LOGIN_URL,
+    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    try:
-        print(f"📖 Öffne {LEXWARE_LOGIN_URL}...")
-        driver.get(LEXWARE_LOGIN_URL)
-        time.sleep(3)
-        print(f"📍 URL: {driver.current_url}")
-        print(f"🔍 navigator.webdriver: {driver.execute_script('return navigator.webdriver')}")
+    time.sleep(4)
 
-        _dismiss_cookie_banner(driver)
+    with sync_playwright() as p:
+        print(f"🔌 Verbinde via CDP...")
+        browser = p.chromium.connect_over_cdp(f"http://localhost:{CDP_PORT}")
+        ctx = browser.contexts[0]
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        page.bring_to_front()
 
-        if any(x in driver.current_url.lower() for x in ["signin", "login", "authenticate"]):
+        time.sleep(2)
+        print(f"📍 URL: {page.url}")
+        print(f"🔍 navigator.webdriver: {page.evaluate('navigator.webdriver')}")
+
+        _dismiss_cookie_banner(page)
+
+        # ── Login ─────────────────────────────────────────────────
+        if any(x in page.url.lower() for x in ["signin", "login", "authenticate"]):
             print(f"🔐 Login als {LW_USER}...")
 
-            user_field = None
-            for sel in ["#username", "input[name='username']", "input[type='email']", "input[autocomplete='username']"]:
-                try:
-                    user_field = _wait_for_element(driver, By.CSS_SELECTOR, sel, timeout=10)
-                    break
-                except Exception:
-                    pass
-            if not user_field:
+            email_el = _find(page, [
+                "input[type='email']",
+                "input[name='email']",
+                "input[name='username']",
+                "input[autocomplete='username']",
+            ], timeout=8_000)
+            if not email_el:
                 raise RuntimeError("Email-Feld nicht gefunden")
-            user_field.clear()
-            user_field.send_keys(LW_USER)
-            print("✅ Email eingegeben")
+            email_el.click()
+            email_el.fill(LW_USER)
+            print("✅ Email gefüllt")
+            time.sleep(0.3)
 
-            pass_field = None
-            for sel in ["#password", "input[name='password']", "input[type='password']"]:
-                try:
-                    pass_field = _wait_for_element(driver, By.CSS_SELECTOR, sel, timeout=10)
-                    break
-                except Exception:
-                    pass
-            if not pass_field:
+            pwd_el = _find(page, ["input[type='password']"], timeout=5_000)
+            if not pwd_el:
                 raise RuntimeError("Passwort-Feld nicht gefunden")
-            pass_field.clear()
-            pass_field.send_keys(LW_PASS)
-            print("✅ Passwort eingegeben")
+            pwd_el.click()
+            pwd_el.fill(LW_PASS)
+            print("✅ Passwort gefüllt")
+            time.sleep(0.3)
 
-            try:
-                btn = _wait_for_element(driver, By.XPATH,
-                    "//button[contains(.,'Anmelden') or contains(.,'Login') or contains(.,'Weiter') or @type='submit']",
-                    timeout=10)
-                print(f"🖱️  Button: '{btn.text}'")
-                driver.execute_script("arguments[0].click();", btn)
-            except Exception:
-                pass_field.submit()
+            btn = _find(page, [
+                "button:has-text('Anmelden')",
+                "button[type='submit']",
+                "button:has-text('Login')",
+            ], timeout=5_000)
+            if btn:
+                print(f"🖱️  Klicke: '{btn.text_content()}'")
+                btn.click()
+            else:
+                pwd_el.press("Enter")
             print("⏳ Warte auf Redirect...")
 
             deadline = time.time() + 45
             last_url = ""
             while time.time() < deadline:
-                url = driver.current_url
+                url = page.url
                 if url != last_url:
                     print(f"📍 URL: {url}")
                     last_url = url
@@ -204,7 +178,7 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
                     break
                 time.sleep(1)
             else:
-                raise RuntimeError(f"Login-Timeout. URL: {driver.current_url}")
+                raise RuntimeError(f"Login-Timeout. URL: {page.url}")
 
             time.sleep(2)
         else:
@@ -212,33 +186,53 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
         # ── Voucher-Editor ────────────────────────────────────────
         print(f"📖 Öffne Voucher-Editor...")
-        driver.get(LEXWARE_VOUCHER_URL)
+        page.goto(LEXWARE_VOUCHER_URL, wait_until="domcontentloaded", timeout=TIMEOUT_NAV)
         time.sleep(3)
-        print(f"📍 URL: {driver.current_url}")
+        print(f"📍 URL: {page.url}")
 
         # ── File-Input ────────────────────────────────────────────
         print("🖱️  Suche File-Input...")
-        fi = _get_file_input(driver, timeout=20)
+        fi = None
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            try:
+                loc = page.locator("input[type='file']").first
+                loc.wait_for(state="attached", timeout=2000)
+                fi = loc
+                break
+            except Exception:
+                pass
+            time.sleep(0.5)
+
         if not fi:
             raise RuntimeError("File-Input nicht gefunden")
 
-        _make_file_input_visible(driver, fi)
+        # Sichtbar machen
+        page.evaluate("""
+var el = document.querySelector("input[type='file']");
+if (el) {
+    el.style.cssText = 'display:block!important;visibility:visible!important;opacity:1!important;width:100px!important;height:30px!important;';
+    el.removeAttribute('hidden');
+    el.removeAttribute('aria-hidden');
+    el.removeAttribute('disabled');
+}
+""")
         time.sleep(0.3)
 
-        count_before = _get_badge_count(driver)
+        count_before = _get_badge_count(page)
         print(f"📊 Badge-Zähler vor Upload: {count_before}")
 
-        fi.send_keys(abs_path)
+        fi.set_input_files(abs_path)
         print(f"✅ Datei gesetzt: {filename}")
         time.sleep(3)
 
-        # ── Bestätigung ───────────────────────────────────────────
+        # ── Bestätigung per Badge ─────────────────────────────────
         print("⏳ Warte auf Upload-Bestätigung...")
         for attempt in range(10):
             print(f"   🔄 Refresh {attempt + 1}/10...")
-            driver.refresh()
+            page.reload(wait_until="domcontentloaded")
             time.sleep(4)
-            count_after = _get_badge_count(driver)
+            count_after = _get_badge_count(page)
             print(f"   📊 Badge: {count_after}")
             if count_after is not None and count_before is not None and count_after > count_before:
                 print(f"✅ Upload bestätigt! {count_before} → {count_after}")
@@ -250,10 +244,9 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
             print("⚠️  Timeout — möglicherweise trotzdem hochgeladen")
 
         print(f"\n✅ Upload abgeschlossen: {filename}")
+        browser.close()
 
-    finally:
-        driver.quit()
-
+    proc.terminate()
     return {"status": "ok", "filename": filename, "file": file_path}
 
 
