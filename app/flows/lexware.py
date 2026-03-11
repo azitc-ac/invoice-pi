@@ -149,7 +149,7 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload")
+    print(f"\n🚀 Starte Lexware Upload 1")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
@@ -212,15 +212,27 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
             pass_field.send_keys(LW_PASS)
             print("✅ Passwort eingegeben")
 
-            # Anmelden-Button
+            # Anmelden-Button — erst normaler Click, dann JS-Fallback
+            clicked = False
             try:
                 btn = _wait_for_element(driver, By.XPATH,
                     "//button[contains(.,'Anmelden') or contains(.,'Login') or contains(.,'Weiter') or @type='submit']",
                     timeout=10)
-                btn.click()
-            except Exception:
-                pass_field.submit()
-            print("✅ Anmelden geklickt — warte auf Redirect...")
+                print(f"🖱️  Button gefunden: '{btn.text}' enabled={btn.is_enabled()}")
+                driver.execute_script("arguments[0].click();", btn)
+                clicked = True
+                print("✅ Anmelden per JS-Click")
+            except Exception as e:
+                print(f"⚠️  Button nicht gefunden: {e}")
+
+            if not clicked:
+                try:
+                    pass_field.submit()
+                    print("✅ Anmelden per form.submit()")
+                except Exception as e:
+                    print(f"⚠️  submit() fehlgeschlagen: {e}")
+
+            print("⏳ Warte auf Redirect...")
 
             # Warten auf erfolgreichen Login
             deadline = time.time() + 45
