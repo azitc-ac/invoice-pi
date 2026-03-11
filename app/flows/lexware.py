@@ -3,7 +3,7 @@ import time
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
 PW_USERDATA = os.getenv("PW_USERDATA_LEXWARE", "/pwdata/lexware")
-LEXWARE_URL = "https://app.lexware.de"
+LEXWARE_URL = "https://lexware.de"
 
 TIMEOUT_NAVIGATION   = 20_000
 TIMEOUT_ELEMENT      = 15_000

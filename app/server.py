@@ -330,7 +330,7 @@ def _open_browser_for_login(site: str):
             "anti_detection": False,
         },
         "lexware": {
-            "url": "https://app.lexware.de",
+            "url": "https://lexware.de",
             "userdata": os.getenv("PW_USERDATA_LEXWARE", "/pwdata/lexware"),
             "username": os.getenv("LEXWARE_USERNAME", ""),
             "password": os.getenv("LEXWARE_PASSWORD", ""),
