@@ -149,13 +149,10 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v3")
+    print(f"\n🚀 Starte Lexware Upload v4")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
-
-    # Extension zum Verstecken von navigator.webdriver
-    XPI_PATH = "/app/webdriver-hide.xpi"
 
     options = Options()
     options.binary_location = FF_BIN
@@ -168,13 +165,6 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
     # Geckodriver-Pref via capability
     options.set_preference("dom.webdriver.enabled", False)
     options.set_preference("useAutomationExtension", False)
-    # Extension laden die navigator.webdriver auf undefined setzt
-    import os as _os
-    if _os.path.exists(XPI_PATH):
-        options.add_extension(XPI_PATH)
-        print(f"🔌 Extension geladen: {XPI_PATH}")
-    else:
-        print(f"⚠️  Extension nicht gefunden: {XPI_PATH}")
 
     service = Service(executable_path=GECKODRIVER, log_path="/tmp/geckodriver.log")
 
