@@ -124,7 +124,7 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v12")
+    print(f"\n🚀 Starte Lexware Upload v13")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
@@ -224,7 +224,7 @@ Array.from(document.querySelectorAll('button, a, [role="button"]'))
                 pwd_el.press("Enter")
             print("⏳ Warte auf Redirect...")
 
-            deadline = time.time() + 45
+            deadline = time.time() + 120
             last_url = ""
             while time.time() < deadline:
                 url = page.url
@@ -234,21 +234,36 @@ Array.from(document.querySelectorAll('button, a, [role="button"]'))
                 if not any(x in url.lower() for x in ["signin", "login", "authenticate", "403", "forbidden"]):
                     print(f"✅ Eingeloggt!")
                     break
-                time.sleep(1)
+                time.sleep(2)
             else:
                 raise RuntimeError(f"Login-Timeout. URL: {page.url}")
 
-            time.sleep(2)
+            time.sleep(3)
         else:
             print("✅ Bereits eingeloggt")
 
-        # ── Voucher-Editor ────────────────────────────────────────
-        print(f"📖 Öffne Voucher-Editor...")
-        try:
-            page.goto(LEXWARE_VOUCHER_URL, wait_until="commit", timeout=15_000)
-        except Exception as e:
-            print(f"⚠️  goto Exception (ignoriert): {e}")
-        time.sleep(3)
+        # ── Voucher-Editor per Button ─────────────────────────────
+        print(f"📍 Dashboard URL: {page.url}")
+        print(f"🖱️  Suche 'Neuen Beleg erfassen'...")
+        btn_new = _find(page, [
+            "button:has-text('Neuen Beleg erfassen')",
+            "a:has-text('Neuen Beleg erfassen')",
+            "[class*='voucher']:has-text('Neuen')",
+        ], timeout=15_000)
+
+        if btn_new:
+            btn_new.click()
+            print("✅ 'Neuen Beleg erfassen' geklickt")
+            time.sleep(3)
+        else:
+            # Fallback: direkte URL
+            print("⚠️  Button nicht gefunden — navigiere direkt...")
+            try:
+                page.goto(LEXWARE_VOUCHER_URL, wait_until="commit", timeout=15_000)
+            except Exception as e:
+                print(f"⚠️  goto Exception (ignoriert): {e}")
+            time.sleep(3)
+
         print(f"📍 URL: {page.url}")
 
         # ── File-Input ────────────────────────────────────────────
