@@ -131,24 +131,34 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     wid = _get_wid(timeout=20)
     print(f"✅ Firefox gestartet (WID: {wid})")
-    time.sleep(5)
+    time.sleep(6)
+
+    # Popups wegdrücken (Übersetzungs-Popup, etc.)
+    _focus(wid)
+    _key(wid, "Escape")
+    time.sleep(0.5)
+    _key(wid, "Escape")
+    time.sleep(0.5)
 
     # ── Login prüfen ─────────────────────────────────────────────
     url = _get_url(wid)
     print(f"📍 Start-URL: {url}")
 
-    if "signin" in url.lower() or "login" in url.lower() or "authenticate" in url.lower():
-        print("🔐 Login erforderlich...")
+    # Wenn URL leer oder nicht lesbar, nochmal versuchen
+    if not url or len(url) < 5:
+        time.sleep(3)
+        url = _get_url(wid)
+        print(f"📍 Start-URL (2. Versuch): {url}")
 
-        # Cookie-Banner wegklicken falls vorhanden
-        # Wir suchen nach dem "Alle akzeptieren" Button per Maus-Position ist unzuverlässig
-        # Besser: Tab+Enter zum ersten Button navigieren oder per Tastatur
+    if "signin" in url.lower() or "login" in url.lower() or "authenticate" in url.lower() or not url or len(url) < 5:
+        print("🔐 Login erforderlich...")
         time.sleep(2)
 
-        # Versuche Cookie-Banner per Tab+Leertaste zu akzeptieren
-        # "Alle akzeptieren" ist meist der zweite/rechte Button
+        # Cookie-Banner wegklicken — "Alle akzeptieren" ist der rechte Button
+        # Per Tab navigieren: 2x Tab + Enter
         _focus(wid)
-        # Klick in die Mitte des Dialogs um Fokus zu setzen
+        _key(wid, "Escape")  # Evtl. Übersetzungs-Popup schließen
+        time.sleep(0.5)
         _key(wid, "Tab")
         time.sleep(0.3)
         _key(wid, "Tab")
