@@ -164,15 +164,25 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
             viewport={"width": 1280, "height": 900},
             locale="de-DE",
             timezone_id="Europe/Berlin",
+            # Direkt Lexware öffnen — überspringt Welcome-Screen
+            firefox_user_prefs={
+                "browser.startup.homepage": LEXWARE_LOGIN_URL,
+                "browser.startup.page": 1,
+                "browser.aboutwelcome.enabled": False,
+                "startup.homepage_welcome_url": "",
+                "browser.shell.checkDefaultBrowser": False,
+            },
         )
 
-        # Ersten Tab nehmen oder neuen öffnen
-        time.sleep(2)
+        # Ersten Tab nehmen
+        time.sleep(3)
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
 
-        # ── Login ─────────────────────────────────────────────────
-        print(f"📖 Öffne {LEXWARE_LOGIN_URL}...")
-        page.goto(LEXWARE_LOGIN_URL, wait_until="domcontentloaded", timeout=TIMEOUT_NAV)
+        # Falls Welcome-Screen noch da — direkt navigieren
+        if "lexware" not in page.url.lower():
+            print(f"📖 Navigiere zu {LEXWARE_LOGIN_URL}...")
+            page.goto(LEXWARE_LOGIN_URL, wait_until="domcontentloaded", timeout=TIMEOUT_NAV)
+
         page.bring_to_front()
 
         # Andere Tabs schließen
