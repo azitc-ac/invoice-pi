@@ -92,7 +92,7 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v8")
+    print(f"\n🚀 Starte Lexware Upload v9")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
@@ -131,6 +131,23 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
         time.sleep(2)
         print(f"📍 URL: {page.url}")
         print(f"🔍 navigator.webdriver: {page.evaluate('navigator.webdriver')}")
+
+        # Erst warten bis Login-Formular sichtbar ist
+        print("⏳ Warte auf Login-Formular...")
+        try:
+            page.wait_for_selector("input[type='email'], input[type='password'], input[name='username']", timeout=15_000)
+        except Exception:
+            pass
+        time.sleep(1)
+
+        # Debug: alle Buttons ausgeben
+        buttons = page.evaluate("""
+Array.from(document.querySelectorAll('button, a, [role="button"]'))
+    .map(e => e.innerText || e.textContent || '')
+    .filter(t => t.trim())
+    .map(t => t.trim().substring(0, 60))
+""")
+        print(f"🔍 Sichtbare Buttons: {buttons[:10]}")
 
         _dismiss_cookie_banner(page)
 
