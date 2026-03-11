@@ -174,21 +174,12 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
             },
         )
 
-        # Neuen Tab öffnen und zu Lexware navigieren — Welcome-Screen ignorieren
+        # Vorhandenen Tab nehmen und navigieren
         time.sleep(2)
-        page = ctx.new_page()
-        print(f"📖 Öffne {LEXWARE_LOGIN_URL}...")
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        print(f"📖 Navigiere zu {LEXWARE_LOGIN_URL}...")
         page.goto(LEXWARE_LOGIN_URL, wait_until="commit", timeout=TIMEOUT_NAV)
         page.bring_to_front()
-
-        # Welcome/Privacy Tabs schließen
-        for p2 in ctx.pages:
-            if p2 != page:
-                try:
-                    p2.close()
-                except Exception:
-                    pass
-
         time.sleep(3)
         print(f"📍 URL: {page.url}")
 
