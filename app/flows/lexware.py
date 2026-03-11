@@ -178,7 +178,7 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
         time.sleep(2)
         page = ctx.new_page()
         print(f"📖 Öffne {LEXWARE_LOGIN_URL}...")
-        page.goto(LEXWARE_LOGIN_URL, wait_until="domcontentloaded", timeout=TIMEOUT_NAV)
+        page.goto(LEXWARE_LOGIN_URL, wait_until="commit", timeout=TIMEOUT_NAV)
         page.bring_to_front()
 
         # Welcome/Privacy Tabs schließen
