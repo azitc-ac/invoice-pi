@@ -1,14 +1,17 @@
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, UploadFile, File, Form
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 from flows.freenet import run_freenet_download
 from flows.netaachen import run_netaachen_download
+from flows.lexware import run_lexware_upload
 import os
 import subprocess
 import time
 import asyncio
 import glob
+import shutil
+import tempfile
 
 app = FastAPI()
 
@@ -40,12 +43,9 @@ def is_headless() -> bool:
 
 @app.middleware("http")
 async def api_key_middleware(request: Request, call_next):
-    # Immer offen: Health-Check + Admin UI selbst (Login-Dialog ist in der Seite)
-    # WebSocket Auth läuft über Query-Parameter
     if request.url.path in ("/health", "/admin", "/ws/logs"):
         return await call_next(request)
 
-    # Kein API_KEY konfiguriert → durchlassen (Dev-Modus)
     if not API_KEY:
         return await call_next(request)
 
@@ -58,7 +58,8 @@ async def api_key_middleware(request: Request, call_next):
 
 class DownloadRequest(BaseModel):
     site: str
-    month_offset: int = 0  # 0 = aktuell, 1 = Vormonat
+    month_offset: int = 0
+
 
 # ============================================================
 # API ENDPOINT - Cleanup Locks
@@ -67,6 +68,7 @@ class DownloadRequest(BaseModel):
 PW_USERDIRS = {
     "freenet": os.getenv("PW_USERDATA_FREENET", "/pwdata/freenet"),
     "netaachen": os.getenv("PW_USERDATA_NETAACHEN", "/pwdata/netaachen"),
+    "lexware": os.getenv("PW_USERDATA_LEXWARE", "/pwdata/lexware"),
 }
 LOCK_FILES = ["SingletonLock", "SingletonCookie", "SingletonSocket"]
 
@@ -82,7 +84,6 @@ def cleanup_locks():
                 removed.append(path)
                 print(f"🧹 Lock entfernt: {path}")
 
-    # Verwaiste Chromium-Prozesse killen
     try:
         subprocess.run(["pkill", "-f", "chromium"], capture_output=True)
         print("🧹 Chromium-Prozesse beendet")
@@ -98,13 +99,10 @@ def cleanup_locks():
 # ============================================================
 
 def get_supervisor_status(service_name):
-    """Check if supervisor service is running"""
     try:
         result = subprocess.run(
             ["supervisorctl", "status", service_name],
-            capture_output=True,
-            text=True,
-            timeout=5
+            capture_output=True, text=True, timeout=5
         )
         return "RUNNING" in result.stdout
     except Exception as e:
@@ -112,51 +110,36 @@ def get_supervisor_status(service_name):
         return False
 
 def start_vnc_services():
-    """Start all VNC-related services"""
     services = ["xvfb", "fluxbox", "x11vnc", "novnc"]
     results = {}
-    
     for service in services:
         try:
-            subprocess.run(
-                ["supervisorctl", "start", service],
-                capture_output=True,
-                timeout=5
-            )
+            subprocess.run(["supervisorctl", "start", service], capture_output=True, timeout=5)
             time.sleep(1)
             results[service] = get_supervisor_status(service)
         except Exception as e:
             results[service] = f"Error: {e}"
-    
     return results
 
 def stop_vnc_services():
-    """Stop all VNC-related services"""
-    services = ["novnc", "x11vnc", "fluxbox", "xvfb"]  # Stop in reverse order
+    services = ["novnc", "x11vnc", "fluxbox", "xvfb"]
     results = {}
-    
     for service in services:
         try:
-            subprocess.run(
-                ["supervisorctl", "stop", service],
-                capture_output=True,
-                timeout=5
-            )
+            subprocess.run(["supervisorctl", "stop", service], capture_output=True, timeout=5)
             time.sleep(0.5)
             results[service] = not get_supervisor_status(service)
         except Exception as e:
             results[service] = f"Error: {e}"
-    
     return results
 
 def check_debug_mode():
-    """Check if debug mode (VNC) is active"""
     return get_supervisor_status("novnc") and get_supervisor_status("xvfb")
 
 def get_vnc_url(request: Request) -> str:
-    """VNC URL dynamisch aus dem Request-Host bauen"""
     host = request.headers.get("host", "localhost").split(":")[0]
     return f"http://{host}:8081/vnc.html"
+
 
 # ============================================================
 # API ENDPOINTS - Download
@@ -164,7 +147,6 @@ def get_vnc_url(request: Request) -> str:
 
 @app.post("/download")
 def download(req: DownloadRequest):
-    """Trigger Download, gibt Dateipfade zurück (lokale Speicherung)"""
     site = req.site.strip().lower()
     if site == "freenet":
         files = run_freenet_download(headless=is_headless(), month_offset=req.month_offset)
@@ -177,7 +159,6 @@ def download(req: DownloadRequest):
 
 @app.post("/download/file")
 def download_file(req: DownloadRequest):
-    """Trigger Download und liefere die PDF-Datei direkt zurück (für Power Automate)"""
     site = req.site.strip().lower()
     if site == "freenet":
         files: List[str] = run_freenet_download(headless=is_headless())
@@ -185,38 +166,127 @@ def download_file(req: DownloadRequest):
         files: List[str] = run_netaachen_download(headless=is_headless())
     else:
         raise HTTPException(status_code=400, detail="Unsupported site")
-    
+
     if not files:
         raise HTTPException(status_code=500, detail="No file downloaded")
-    
+
     path = files[0]
     if not os.path.isfile(path):
         raise HTTPException(status_code=500, detail=f"Downloaded file not found: {path}")
-    
+
     filename = os.path.basename(path)
-    
     if filename.lower().endswith(".pdf"):
         media_type = "application/pdf"
     elif filename.lower().endswith(".zip"):
         media_type = "application/zip"
     else:
         media_type = "application/octet-stream"
-    
-    return FileResponse(
-        path=path,
-        media_type=media_type,
-        filename=filename,  # originaler Dateiname bleibt erhalten
-    )
+
+    return FileResponse(path=path, media_type=media_type, filename=filename)
+
+
+# ============================================================
+# API ENDPOINTS - Upload (Lexware)
+# ============================================================
+
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@app.post("/upload/lexware")
+async def upload_lexware(file: UploadFile = File(...)):
+    """
+    Nimmt eine hochgeladene PDF-Datei entgegen und lädt sie via Playwright zu Lexware hoch.
+    Erwartet multipart/form-data mit field 'file'.
+    """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Kein Dateiname")
+
+    # Datei temporär speichern
+    safe_name = os.path.basename(file.filename)
+    tmp_path = os.path.join(UPLOAD_DIR, safe_name)
+
+    try:
+        with open(tmp_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+        print(f"📥 Datei empfangen: {tmp_path} ({len(content)} bytes)")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Fehler beim Speichern: {e}")
+
+    try:
+        result = run_lexware_upload(file_path=tmp_path, headless=is_headless())
+        return result
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload fehlgeschlagen: {e}")
+
+
+@app.post("/upload/lexware/path")
+def upload_lexware_by_path(req: dict):
+    """
+    Alternativer Endpoint: Lädt eine bereits lokal gespeicherte Datei zu Lexware hoch.
+    Body: { "file_path": "/downloads/Rechnung_Freenet_2026-02.pdf" }
+    """
+    file_path = req.get("file_path", "").strip()
+    if not file_path:
+        raise HTTPException(status_code=400, detail="file_path fehlt")
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail=f"Datei nicht gefunden: {file_path}")
+
+    try:
+        result = run_lexware_upload(file_path=file_path, headless=is_headless())
+        return result
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload fehlgeschlagen: {e}")
+
+
+@app.get("/uploads/list")
+def list_uploads():
+    """Listet alle Dateien im Upload-Verzeichnis auf"""
+    try:
+        files = []
+        for f in sorted(os.listdir(UPLOAD_DIR)):
+            full = os.path.join(UPLOAD_DIR, f)
+            if os.path.isfile(full):
+                files.append({
+                    "name": f,
+                    "path": full,
+                    "size": os.path.getsize(full),
+                })
+        return {"status": "ok", "files": files}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/downloads/list")
+def list_downloads():
+    """Listet alle Dateien im Download-Verzeichnis auf"""
+    download_dir = os.getenv("DOWNLOAD_DIR", "/downloads")
+    try:
+        files = []
+        for f in sorted(os.listdir(download_dir)):
+            full = os.path.join(download_dir, f)
+            if os.path.isfile(full) and f.endswith(".pdf"):
+                files.append({
+                    "name": f,
+                    "path": full,
+                    "size": os.path.getsize(full),
+                })
+        return {"status": "ok", "files": files}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============================================================
 # API ENDPOINTS - Session Init (manueller Login)
 # ============================================================
 
 def _open_browser_for_login(site: str):
-    """
-    Öffnet Browser mit vorausgefüllten Credentials.
-    User muss nur noch auf Anmelden klicken.
-    Browser bleibt 5 Minuten offen → Session wird in pwdata gespeichert.
-    """
     from playwright.sync_api import sync_playwright
 
     configs = {
@@ -236,6 +306,14 @@ def _open_browser_for_login(site: str):
             "fill_username": "input#username",
             "fill_password": "input#password",
         },
+        "lexware": {
+            "url": "https://app.lexware.de",
+            "userdata": os.getenv("PW_USERDATA_LEXWARE", "/pwdata/lexware"),
+            "username": os.getenv("LEXWARE_USERNAME", ""),
+            "password": os.getenv("LEXWARE_PASSWORD", ""),
+            "fill_username": "input[type='email'], input[name='email'], input[id*='email'], input[id*='user']",
+            "fill_password": "input[type='password']",
+        },
     }
 
     cfg = configs[site]
@@ -251,15 +329,15 @@ def _open_browser_for_login(site: str):
         page.goto(cfg["url"], wait_until="domcontentloaded")
         time.sleep(2)
 
-        # Credentials vorausfüllen
         try:
-            page.fill(cfg["fill_username"], cfg["username"])
-            page.fill(cfg["fill_password"], cfg["password"])
+            if cfg["username"]:
+                page.fill(cfg["fill_username"], cfg["username"])
+            if cfg["password"]:
+                page.fill(cfg["fill_password"], cfg["password"])
             print(f"✅ Credentials vorausgefüllt für {site} — warte auf manuellen Login...")
         except Exception as e:
             print(f"⚠️  Konnte Credentials nicht einfüllen: {e}")
 
-        # 5 Minuten offen lassen für manuellen Login + Navigation
         time.sleep(300)
         print(f"⏰ Timeout erreicht, Browser wird geschlossen. Session gespeichert in {cfg['userdata']}")
         context.close()
@@ -267,11 +345,6 @@ def _open_browser_for_login(site: str):
 
 @app.post("/session/init")
 def session_init(req: DownloadRequest, request: Request):
-    """
-    Öffnet Browser im GUI-Modus mit vorausgefüllten Credentials.
-    User klickt manuell auf Anmelden → Session wird gespeichert.
-    Voraussetzung: Debug-Modus muss aktiv sein (POST /debug/enable).
-    """
     import threading
 
     if not check_debug_mode():
@@ -281,7 +354,7 @@ def session_init(req: DownloadRequest, request: Request):
         )
 
     site = req.site.strip().lower()
-    if site not in ("freenet", "netaachen"):
+    if site not in ("freenet", "netaachen", "lexware"):
         raise HTTPException(status_code=400, detail="Unsupported site")
 
     thread = threading.Thread(target=_open_browser_for_login, args=(site,), daemon=True)
@@ -306,9 +379,7 @@ def health():
 
 @app.get("/debug/status")
 def debug_status(request: Request):
-    """Check debug mode status"""
     is_enabled = check_debug_mode()
-    
     return {
         "debug_enabled": is_enabled,
         "vnc_url": get_vnc_url(request) if is_enabled else None,
@@ -323,22 +394,16 @@ def debug_status(request: Request):
 
 @app.post("/debug/enable")
 def debug_enable(request: Request):
-    """Enable debug mode (start VNC services)"""
-    
     if check_debug_mode():
         return {
             "status": "already_enabled",
             "message": "Debug mode is already active",
             "vnc_url": get_vnc_url(request)
         }
-    
     print("🚀 Starting VNC services...")
     results = start_vnc_services()
-    
     time.sleep(3)
-    
     is_enabled = check_debug_mode()
-    
     return {
         "status": "enabled" if is_enabled else "partial",
         "message": "Debug mode activated - VNC services started",
@@ -348,41 +413,31 @@ def debug_enable(request: Request):
 
 @app.post("/debug/disable")
 def debug_disable():
-    """Disable debug mode (stop VNC services)"""
-    
     if not check_debug_mode():
-        return {
-            "status": "already_disabled",
-            "message": "Debug mode is already inactive"
-        }
-    
+        return {"status": "already_disabled", "message": "Debug mode is already inactive"}
     print("🛑 Stopping VNC services...")
     results = stop_vnc_services()
-    
     time.sleep(1)
-    
     is_disabled = not check_debug_mode()
-    
     return {
         "status": "disabled" if is_disabled else "partial",
         "message": "Debug mode deactivated - VNC services stopped",
         "services": results
     }
 
+
 # ============================================================
 # WEBSOCKET - Live Log Stream
 # ============================================================
 
 def find_log_file() -> str | None:
-    """Findet die aktuelle fastapi-stdout Logdatei"""
     matches = glob.glob("/var/log/supervisor/fastapi-stdout---supervisor-*.log")
     return matches[0] if matches else None
 
 @app.websocket("/ws/logs")
 async def ws_logs(websocket: WebSocket, api_key: str = ""):
-    # Auth prüfen (WebSocket kann keine HTTP-Header senden, daher Query-Parameter)
     if API_KEY and api_key != API_KEY:
-        await websocket.close(code=1008)  # Policy violation
+        await websocket.close(code=1008)
         return
 
     await websocket.accept()
@@ -394,7 +449,6 @@ async def ws_logs(websocket: WebSocket, api_key: str = ""):
         return
 
     try:
-        # Sende letzte 50 Zeilen als History
         proc = await asyncio.create_subprocess_exec(
             "tail", "-n", "50", log_path,
             stdout=asyncio.subprocess.PIPE
@@ -403,7 +457,6 @@ async def ws_logs(websocket: WebSocket, api_key: str = ""):
         for line in stdout.decode(errors="replace").splitlines():
             await websocket.send_text(line)
 
-        # Dann live tail -f
         proc = await asyncio.create_subprocess_exec(
             "tail", "-f", "-n", "0", log_path,
             stdout=asyncio.subprocess.PIPE

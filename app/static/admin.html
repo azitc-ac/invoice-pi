@@ -13,6 +13,7 @@
     --border: #252a33;
     --accent: #00e5a0;
     --accent2: #0096ff;
+    --accent3: #a855f7;
     --warn: #ff6b35;
     --text: #e2e8f0;
     --muted: #64748b;
@@ -50,7 +51,6 @@
     color: var(--accent);
     letter-spacing: -0.5px;
   }
-
   .logo span { color: var(--muted); font-weight: 400; }
 
   .status-pill {
@@ -63,13 +63,8 @@
     color: var(--muted);
   }
 
-  .dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    background: var(--muted);
-    transition: background 0.3s;
-  }
-  .dot.online { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); transition: background 0.3s; }
+  .dot.online  { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
   .dot.offline { background: var(--danger); }
 
   /* LAYOUT */
@@ -83,13 +78,61 @@
   /* SIDEBAR */
   aside {
     border-right: 1px solid var(--border);
-    padding: 28px 24px;
     display: flex;
     flex-direction: column;
-    gap: 24px;
-    overflow-y: auto;
+    overflow: hidden;
     background: var(--surface);
   }
+
+  /* TABS */
+  .tab-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .tab-btn {
+    padding: 14px 0;
+    background: none;
+    border: none;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    cursor: pointer;
+    position: relative;
+    transition: color 0.2s;
+  }
+
+  .tab-btn::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; left: 20%; right: 20%;
+    height: 2px;
+    border-radius: 2px 2px 0 0;
+    background: transparent;
+    transition: background 0.2s;
+  }
+
+  .tab-btn.active { color: var(--text); }
+  .tab-btn.active.download::after { background: var(--accent); }
+  .tab-btn.active.upload::after   { background: var(--accent3); }
+
+  .tab-btn:hover:not(.active) { color: var(--text); }
+
+  /* TAB PANELS */
+  .tab-panel {
+    display: none;
+    flex-direction: column;
+    gap: 24px;
+    padding: 28px 24px;
+    overflow-y: auto;
+    flex: 1;
+  }
+  .tab-panel.active { display: flex; }
 
   .section-label {
     font-family: var(--mono);
@@ -112,32 +155,16 @@
     border-radius: 10px;
     transition: border-color 0.2s;
   }
-
   .toggle-row:has(.toggle-switch input:checked) {
     border-color: var(--accent);
     box-shadow: 0 0 0 1px var(--accent)22;
   }
 
-  .toggle-label {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--text);
-  }
+  .toggle-label { font-size: 14px; font-weight: 500; color: var(--text); }
+  .toggle-sub   { font-size: 11px; color: var(--muted); margin-top: 2px; font-family: var(--mono); }
 
-  .toggle-sub {
-    font-size: 11px;
-    color: var(--muted);
-    margin-top: 2px;
-    font-family: var(--mono);
-  }
-
-  .toggle-switch {
-    position: relative;
-    width: 44px; height: 24px;
-  }
-
+  .toggle-switch { position: relative; width: 44px; height: 24px; }
   .toggle-switch input { opacity: 0; width: 0; height: 0; }
-
   .slider {
     position: absolute; inset: 0;
     background: var(--border);
@@ -145,7 +172,6 @@
     cursor: pointer;
     transition: background 0.3s;
   }
-
   .slider::before {
     content: '';
     position: absolute;
@@ -155,12 +181,8 @@
     border-radius: 50%;
     transition: transform 0.3s, background 0.3s;
   }
-
   .toggle-switch input:checked + .slider { background: var(--accent)33; }
-  .toggle-switch input:checked + .slider::before {
-    transform: translateX(20px);
-    background: var(--accent);
-  }
+  .toggle-switch input:checked + .slider::before { transform: translateX(20px); background: var(--accent); }
 
   /* CARD */
   .card {
@@ -170,12 +192,7 @@
     padding: 16px;
   }
 
-  .card-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text);
-    margin-bottom: 12px;
-  }
+  .card-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 12px; }
 
   /* SELECT */
   select {
@@ -197,7 +214,6 @@
     background-position: right 12px center;
     padding-right: 32px;
   }
-
   select:focus { border-color: var(--accent); }
 
   /* BUTTON */
@@ -218,32 +234,20 @@
     letter-spacing: 0.3px;
   }
 
-  .btn-primary {
-    background: var(--accent);
-    color: #000;
-  }
+  .btn-primary   { background: var(--accent); color: #000; }
   .btn-primary:hover { background: #00ffb3; transform: translateY(-1px); }
-  .btn-primary:active { transform: translateY(0); }
 
-  .btn-secondary {
-    background: var(--surface);
-    color: var(--text);
-    border: 1px solid var(--border);
-  }
+  .btn-purple    { background: var(--accent3); color: #fff; }
+  .btn-purple:hover { background: #c084fc; transform: translateY(-1px); }
+
+  .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
   .btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); }
 
-  .btn-danger {
-    background: var(--danger)22;
-    color: var(--danger);
-    border: 1px solid var(--danger)44;
-  }
+  .btn-danger    { background: var(--danger)22; color: var(--danger); border: 1px solid var(--danger)44; }
   .btn-danger:hover { background: var(--danger)33; }
 
-  .btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-    transform: none !important;
-  }
+  .btn:disabled  { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+  .btn:active    { transform: translateY(0) !important; }
 
   /* SPINNER */
   .spinner {
@@ -254,10 +258,86 @@
     animation: spin 0.6s linear infinite;
     display: none;
   }
-  .loading .spinner { display: block; }
+  .loading .spinner  { display: block; }
   .loading .btn-icon { display: none; }
-
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* FILE DROP ZONE */
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    padding: 28px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    background: var(--bg);
+    position: relative;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent3);
+    background: var(--accent3)08;
+  }
+  .drop-zone input[type='file'] {
+    position: absolute; inset: 0;
+    opacity: 0; cursor: pointer;
+    width: 100%; height: 100%;
+    margin: 0; padding: 0;
+    border: none; background: none;
+  }
+  .drop-icon { font-size: 28px; margin-bottom: 8px; }
+  .drop-label { font-size: 13px; color: var(--text); font-weight: 500; margin-bottom: 4px; }
+  .drop-sub   { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+
+  /* FILE PREVIEW */
+  .file-preview {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--accent3)11;
+    border: 1px solid var(--accent3)44;
+    border-radius: 7px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent3);
+    margin-bottom: 10px;
+  }
+  .file-preview.visible { display: flex; }
+  .file-preview-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-preview-clear {
+    background: none; border: none; color: var(--muted);
+    cursor: pointer; font-size: 14px; padding: 0 2px;
+    line-height: 1;
+  }
+  .file-preview-clear:hover { color: var(--danger); }
+
+  /* DOWNLOAD FILE LIST */
+  .file-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 160px;
+    overflow-y: auto;
+  }
+  .file-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .file-item:hover { border-color: var(--accent3); color: var(--text); }
+  .file-item.selected { border-color: var(--accent3); color: var(--accent3); background: var(--accent3)0d; }
+  .file-item-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-item-size { color: var(--border); font-size: 10px; }
+  .file-list-empty { font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: center; padding: 16px 0; }
 
   /* TOAST */
   #toast-container {
@@ -268,7 +348,6 @@
     gap: 8px;
     z-index: 100;
   }
-
   .toast {
     padding: 10px 16px;
     border-radius: 8px;
@@ -280,14 +359,11 @@
     animation: slideIn 0.2s ease;
     max-width: 320px;
   }
-  .toast.success { border-color: var(--accent); color: var(--accent); }
-  .toast.error { border-color: var(--danger); color: var(--danger); }
-  .toast.info { border-color: var(--accent2); color: var(--accent2); }
-
-  @keyframes slideIn {
-    from { transform: translateX(20px); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
-  }
+  .toast.success { border-color: var(--accent);  color: var(--accent); }
+  .toast.error   { border-color: var(--danger);  color: var(--danger); }
+  .toast.info    { border-color: var(--accent2); color: var(--accent2); }
+  .toast.upload  { border-color: var(--accent3); color: var(--accent3); }
+  @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
   /* LOG AREA */
   .log-panel {
@@ -298,7 +374,6 @@
     background: var(--bg);
     overflow: hidden;
   }
-
   .log-header {
     padding: 16px 24px;
     border-bottom: 1px solid var(--border);
@@ -307,14 +382,7 @@
     gap: 12px;
     background: var(--surface);
   }
-
-  .log-title {
-    font-family: var(--mono);
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text);
-  }
-
+  .log-title { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text); }
   .log-badge {
     font-family: var(--mono);
     font-size: 10px;
@@ -324,19 +392,8 @@
     border: 1px solid var(--border);
     color: var(--muted);
   }
-
-  .log-badge.connected {
-    background: var(--accent)11;
-    border-color: var(--accent)44;
-    color: var(--accent);
-  }
-
-  .log-controls {
-    margin-left: auto;
-    display: flex;
-    gap: 8px;
-  }
-
+  .log-badge.connected { background: var(--accent)11; border-color: var(--accent)44; color: var(--accent); }
+  .log-controls { margin-left: auto; display: flex; gap: 8px; }
   .icon-btn {
     padding: 6px 10px;
     background: var(--surface2);
@@ -361,33 +418,22 @@
     color: #94a3b8;
     scroll-behavior: smooth;
   }
-
   #log-output::-webkit-scrollbar { width: 6px; }
   #log-output::-webkit-scrollbar-track { background: transparent; }
   #log-output::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
   .log-line { display: block; padding: 1px 0; }
-  .log-line:hover { color: var(--text); }
+  .log-line:hover    { color: var(--text); }
+  .log-line.info     { color: #64748b; }
+  .log-line.success  { color: var(--accent); }
+  .log-line.error    { color: var(--danger); }
+  .log-line.warn     { color: var(--warn); }
+  .log-line.http     { color: #7c3aed; }
+  .log-line.highlight{ color: var(--accent2); }
+  .log-line.upload   { color: var(--accent3); }
+  .log-empty { color: var(--muted); text-align: center; padding: 60px 0; font-size: 13px; }
 
-  .log-line.info { color: #64748b; }
-  .log-line.success { color: var(--accent); }
-  .log-line.error { color: var(--danger); }
-  .log-line.warn { color: var(--warn); }
-  .log-line.http { color: #7c3aed; }
-  .log-line.highlight { color: var(--accent2); }
-
-  .log-empty {
-    color: var(--muted);
-    text-align: center;
-    padding: 60px 0;
-    font-size: 13px;
-  }
-
-  .divider {
-    height: 1px;
-    background: var(--border);
-    margin: 4px 0;
-  }
+  .divider { height: 1px; background: var(--border); margin: 4px 0; }
 </style>
 </head>
 <body>
@@ -403,87 +449,190 @@
 <main>
   <aside>
 
-    <!-- DEBUG MODE -->
-    <div>
-      <div class="section-label">Debug Mode</div>
-      <div class="toggle-row">
-        <div>
-          <div class="toggle-label">VNC / sichtbarer Browser</div>
-          <div class="toggle-sub" id="debug-sub">inaktiv</div>
-        </div>
-        <label class="toggle-switch">
-          <input type="checkbox" id="debug-toggle">
-          <span class="slider"></span>
-        </label>
-      </div>
-      <div style="margin-top:10px; display:none" id="vnc-link-row">
-        <a id="vnc-link" href="#" target="_blank" style="font-family:var(--mono);font-size:11px;color:var(--accent2);text-decoration:none;">
-          → noVNC öffnen ↗
-        </a>
-      </div>
+    <!-- TAB BAR -->
+    <div class="tab-bar">
+      <button class="tab-btn download active" onclick="switchTab('download')">⬇ Download</button>
+      <button class="tab-btn upload"          onclick="switchTab('upload')">⬆ Upload</button>
     </div>
 
-    <!-- SESSION SPEICHERN -->
-    <div>
-      <div class="section-label">Session speichern</div>
-      <div class="card">
-        <div class="card-title">Manueller Login</div>
-        <select id="session-site">
-          <option value="freenet">Freenet</option>
-          <option value="netaachen">NetAachen</option>
-        </select>
-        <button class="btn btn-secondary" id="btn-session" onclick="initSession()">
-          <span class="btn-icon">🔐</span>
-          <div class="spinner"></div>
-          Browser öffnen & Login
-        </button>
-        <div style="margin-top:8px;font-size:11px;color:var(--muted);font-family:var(--mono);">
-          Credentials werden vorausgefüllt.<br>Nur noch Anmelden klicken.
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- TAB: DOWNLOAD                                       -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <div class="tab-panel active" id="tab-download">
+
+      <!-- DEBUG MODE -->
+      <div>
+        <div class="section-label">Debug Mode</div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">VNC / sichtbarer Browser</div>
+            <div class="toggle-sub" id="debug-sub">inaktiv</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="debug-toggle">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div style="margin-top:10px;display:none" id="vnc-link-row">
+          <a id="vnc-link" href="#" target="_blank"
+             style="font-family:var(--mono);font-size:11px;color:var(--accent2);text-decoration:none;">
+            → noVNC öffnen ↗
+          </a>
         </div>
       </div>
-    </div>
 
-    <!-- DOWNLOAD TEST -->
-    <div>
-      <div class="section-label">Lokaler Download-Test</div>
-      <div class="card">
-        <div class="card-title">Rechnung herunterladen</div>
-        <select id="download-site">
-          <option value="freenet">Freenet (aktuell)</option>
-          <option value="freenet-prev">Freenet (Vormonat)</option>
-          <option value="netaachen">NetAachen (aktuell)</option>
-          <option value="netaachen-prev">NetAachen (Vormonat)</option>
-        </select>
-        <button class="btn btn-primary" id="btn-download" onclick="triggerDownload()">
-          <span class="btn-icon">⬇</span>
-          <div class="spinner"></div>
-          Jetzt herunterladen
-        </button>
-      </div>
-    </div>
-
-    <!-- WARTUNG -->
-    <div>
-      <div class="section-label">Wartung</div>
-      <div class="card">
-        <div class="card-title">Browser-Locks aufräumen</div>
-        <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:8px;">
-          Wenn ein Download hängt oder "profile in use" Fehler auftritt.
+      <!-- SESSION SPEICHERN -->
+      <div>
+        <div class="section-label">Session speichern</div>
+        <div class="card">
+          <div class="card-title">Manueller Login</div>
+          <select id="session-site">
+            <option value="freenet">Freenet</option>
+            <option value="netaachen">NetAachen</option>
+          </select>
+          <button class="btn btn-secondary" id="btn-session" onclick="initSession()">
+            <span class="btn-icon">🔐</span>
+            <div class="spinner"></div>
+            Browser öffnen &amp; Login
+          </button>
+          <div style="margin-top:8px;font-size:11px;color:var(--muted);font-family:var(--mono);">
+            Credentials werden vorausgefüllt.<br>Nur noch Anmelden klicken.
+          </div>
         </div>
-        <button class="btn btn-secondary" id="btn-cleanup" onclick="cleanupLocks()">
-          <span class="btn-icon">🧹</span>
-          <div class="spinner"></div>
-          Locks aufräumen
-        </button>
+      </div>
+
+      <!-- DOWNLOAD TEST -->
+      <div>
+        <div class="section-label">Lokaler Download-Test</div>
+        <div class="card">
+          <div class="card-title">Rechnung herunterladen</div>
+          <select id="download-site">
+            <option value="freenet">Freenet (aktuell)</option>
+            <option value="freenet-prev">Freenet (Vormonat)</option>
+            <option value="netaachen">NetAachen (aktuell)</option>
+            <option value="netaachen-prev">NetAachen (Vormonat)</option>
+          </select>
+          <button class="btn btn-primary" id="btn-download" onclick="triggerDownload()">
+            <span class="btn-icon">⬇</span>
+            <div class="spinner"></div>
+            Jetzt herunterladen
+          </button>
+        </div>
+      </div>
+
+      <!-- WARTUNG -->
+      <div>
+        <div class="section-label">Wartung</div>
+        <div class="card">
+          <div class="card-title">Browser-Locks aufräumen</div>
+          <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:8px;">
+            Wenn ein Download hängt oder "profile in use" Fehler auftritt.
+          </div>
+          <button class="btn btn-secondary" id="btn-cleanup" onclick="cleanupLocks()">
+            <span class="btn-icon">🧹</span>
+            <div class="spinner"></div>
+            Locks aufräumen
+          </button>
+        </div>
+      </div>
+
+      <div style="flex:1"></div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--border);text-align:center;padding-bottom:8px;">
+        invoice-pi · fastapi + playwright
       </div>
     </div>
 
-    <!-- SPACER -->
-    <div style="flex:1"></div>
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- TAB: UPLOAD                                         -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <div class="tab-panel" id="tab-upload">
 
-    <!-- VERSION -->
-    <div style="font-family:var(--mono);font-size:10px;color:var(--border);text-align:center;">
-      invoice-pi · fastapi + playwright
+      <!-- SESSION LEXWARE -->
+      <div>
+        <div class="section-label">Lexware Session</div>
+        <div class="card">
+          <div class="card-title">Manueller Login (einmalig)</div>
+          <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:10px;">
+            Debug-Modus muss aktiv sein.<br>Session wird in /pwdata/lexware gespeichert.
+          </div>
+          <button class="btn btn-secondary" id="btn-lexware-session" onclick="initLexwareSession()">
+            <span class="btn-icon">🔐</span>
+            <div class="spinner"></div>
+            Lexware Login öffnen
+          </button>
+          <div style="margin-top:8px" id="lexware-vnc-hint" style="display:none">
+            <a id="lexware-vnc-link" href="#" target="_blank"
+               style="font-family:var(--mono);font-size:11px;color:var(--accent2);text-decoration:none;">
+              → noVNC öffnen ↗
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- DATEI HOCHLADEN -->
+      <div>
+        <div class="section-label">Beleg hochladen</div>
+        <div class="card">
+          <div class="card-title">Datei zu Lexware</div>
+
+          <!-- Drop Zone -->
+          <div class="drop-zone" id="drop-zone"
+               ondragover="onDragOver(event)"
+               ondragleave="onDragLeave(event)"
+               ondrop="onDrop(event)">
+            <input type="file" id="file-input" accept=".pdf,.png,.jpg,.jpeg,.xml"
+                   onchange="onFileSelected(event)">
+            <div class="drop-icon">📄</div>
+            <div class="drop-label">PDF hier ablegen</div>
+            <div class="drop-sub">oder klicken zum Auswählen</div>
+          </div>
+
+          <!-- Datei-Vorschau -->
+          <div class="file-preview" id="file-preview">
+            <span>📎</span>
+            <span class="file-preview-name" id="file-preview-name"></span>
+            <button class="file-preview-clear" onclick="clearFile()" title="Entfernen">✕</button>
+          </div>
+
+          <button class="btn btn-purple" id="btn-upload" onclick="uploadToLexware()" disabled>
+            <span class="btn-icon">⬆</span>
+            <div class="spinner"></div>
+            Zu Lexware hochladen
+          </button>
+        </div>
+      </div>
+
+      <!-- LOKAL GESPEICHERTE DOWNLOADS HOCHLADEN -->
+      <div>
+        <div class="section-label">Aus Downloads hochladen</div>
+        <div class="card">
+          <div class="card-title">Gespeicherte Rechnungen</div>
+          <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:10px;">
+            Wähle eine lokal gespeicherte Rechnung aus.
+          </div>
+          <button class="btn btn-secondary" id="btn-refresh-list" onclick="loadDownloadsList()" style="margin-bottom:10px;">
+            <span class="btn-icon">🔄</span>
+            <div class="spinner"></div>
+            Liste aktualisieren
+          </button>
+          <div class="file-list" id="downloads-list">
+            <div class="file-list-empty">Liste laden ↑</div>
+          </div>
+          <div style="margin-top:10px">
+            <button class="btn btn-purple" id="btn-upload-path" onclick="uploadByPath()" disabled>
+              <span class="btn-icon">⬆</span>
+              <div class="spinner"></div>
+              Ausgewählte Datei hochladen
+            </button>
+          </div>
+          <div style="margin-top:8px;font-size:11px;color:var(--muted);font-family:var(--mono);" id="selected-path-label"></div>
+        </div>
+      </div>
+
+      <div style="flex:1"></div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--border);text-align:center;padding-bottom:8px;">
+        invoice-pi · lexware upload
+      </div>
     </div>
 
   </aside>
@@ -523,11 +672,13 @@
 </div>
 
 <script>
-  const API = '';  // leer = same origin
+  const API = '';
   let autoscroll = true;
   let ws = null;
   let debugActive = false;
   let vncUrl = null;
+  let selectedFile = null;
+  let selectedDownloadPath = null;
 
   // ── API KEY ───────────────────────────────────────────────
   let apiKey = sessionStorage.getItem('invoice_pi_api_key') || '';
@@ -581,6 +732,14 @@
     }
   });
 
+  // ── TABS ──────────────────────────────────────────────────
+  function switchTab(name) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`tab-${name}`).classList.add('active');
+    document.querySelector(`.tab-btn.${name}`).classList.add('active');
+  }
+
   // ── HEALTH CHECK ──────────────────────────────────────────
   async function checkHealth() {
     try {
@@ -606,17 +765,20 @@
   function setDebugUI(enabled, url) {
     debugActive = enabled;
     if (url) vncUrl = url;
-    const toggle = document.getElementById('debug-toggle');
-    const sub = document.getElementById('debug-sub');
-    const vncRow = document.getElementById('vnc-link-row');
+    const toggle  = document.getElementById('debug-toggle');
+    const sub     = document.getElementById('debug-sub');
+    const vncRow  = document.getElementById('vnc-link-row');
     const vncLink = document.getElementById('vnc-link');
+    const lvHint  = document.getElementById('lexware-vnc-hint');
+    const lvLink  = document.getElementById('lexware-vnc-link');
 
     toggle.checked = enabled;
     sub.textContent = enabled ? 'aktiv — Browser sichtbar' : 'inaktiv';
     vncRow.style.display = enabled ? 'block' : 'none';
     if (url) {
-      vncLink.href = url;
-      vncLink.textContent = `→ ${url} ↗`;
+      vncLink.href = url; vncLink.textContent = `→ ${url} ↗`;
+      lvLink.href  = url;
+      lvHint.style.display = enabled ? 'block' : 'none';
     }
   }
 
@@ -627,30 +789,22 @@
       const r = await fetch(`${API}${endpoint}`, { method: 'POST', headers: authHeaders() });
       const d = await r.json();
       setDebugUI(d.debug_enabled ?? enable, d.vnc_url);
-      toast(enable ? 'Debug-Modus aktiviert' : 'Debug-Modus deaktiviert',
-            enable ? 'success' : 'info');
+      toast(enable ? 'Debug-Modus aktiviert' : 'Debug-Modus deaktiviert', enable ? 'success' : 'info');
     } catch (err) {
       toast('Fehler: ' + err.message, 'error');
-      e.target.checked = !enable; // revert
+      e.target.checked = !enable;
     }
   });
 
-  // ── SESSION INIT ──────────────────────────────────────────
+  // ── SESSION INIT (Download-Seiten) ────────────────────────
   async function initSession() {
     const site = document.getElementById('session-site').value;
-    const btn = document.getElementById('btn-session');
+    const btn  = document.getElementById('btn-session');
 
-    if (!debugActive) {
-      toast('Debug-Modus muss aktiv sein!', 'error');
-      return;
-    }
+    if (!debugActive) { toast('Debug-Modus muss aktiv sein!', 'error'); return; }
 
     setLoading(btn, true);
-
-    // noVNC Tab öffnen wenn Debug aktiv
-    if (debugActive && vncUrl) {
-      window.open(vncUrl, 'novnc');
-    }
+    if (debugActive && vncUrl) window.open(vncUrl, 'novnc');
 
     try {
       const r = await fetch(`${API}/session/init`, {
@@ -659,11 +813,33 @@
         body: JSON.stringify({ site })
       });
       const d = await r.json();
-      if (r.ok) {
-        toast(`Browser geöffnet für ${site} — bitte einloggen`, 'success');
-      } else {
-        toast(d.detail || 'Fehler', 'error');
-      }
+      if (r.ok) toast(`Browser geöffnet für ${site} — bitte einloggen`, 'success');
+      else toast(d.detail || 'Fehler', 'error');
+    } catch (err) {
+      toast('Fehler: ' + err.message, 'error');
+    } finally {
+      setLoading(btn, false);
+    }
+  }
+
+  // ── SESSION INIT (Lexware) ────────────────────────────────
+  async function initLexwareSession() {
+    const btn = document.getElementById('btn-lexware-session');
+
+    if (!debugActive) { toast('Debug-Modus muss aktiv sein! (Download-Tab)', 'error'); return; }
+
+    setLoading(btn, true);
+    if (vncUrl) window.open(vncUrl, 'novnc');
+
+    try {
+      const r = await fetch(`${API}/session/init`, {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ site: 'lexware' })
+      });
+      const d = await r.json();
+      if (r.ok) toast('Lexware Browser geöffnet — bitte einloggen (5 min)', 'upload');
+      else toast(d.detail || 'Fehler', 'error');
     } catch (err) {
       toast('Fehler: ' + err.message, 'error');
     } finally {
@@ -679,19 +855,16 @@
   }
 
   async function triggerDownload() {
-    const val = document.getElementById('download-site').value;
+    const val    = document.getElementById('download-site').value;
     const isPrev = val.endsWith('-prev');
-    const site = isPrev ? val.replace('-prev', '') : val;
-    const btn = document.getElementById('btn-download');
+    const site   = isPrev ? val.replace('-prev', '') : val;
+    const btn    = document.getElementById('btn-download');
 
     setLoading(btn, true);
     const label = isPrev ? `${site} (${getPrevMonthLabel()})` : site;
     toast(`Starte Download: ${label}...`, 'info');
 
-    // noVNC Tab öffnen wenn Debug aktiv
-    if (debugActive && vncUrl) {
-      window.open(vncUrl, 'novnc');
-    }
+    if (debugActive && vncUrl) window.open(vncUrl, 'novnc');
 
     try {
       const body = isPrev ? { site, month_offset: 1 } : { site };
@@ -701,11 +874,8 @@
         body: JSON.stringify(body)
       });
       const d = await r.json();
-      if (r.ok) {
-        toast(`✓ Gespeichert: ${d.files?.[0]?.split('/').pop() || 'OK'}`, 'success');
-      } else {
-        toast(d.detail || 'Fehler', 'error');
-      }
+      if (r.ok) toast(`✓ Gespeichert: ${d.files?.[0]?.split('/').pop() || 'OK'}`, 'success');
+      else toast(d.detail || 'Fehler', 'error');
     } catch (err) {
       toast('Fehler: ' + err.message, 'error');
     } finally {
@@ -718,15 +888,156 @@
     const btn = document.getElementById('btn-cleanup');
     setLoading(btn, true);
     try {
-      const r = await fetch(`${API}/cleanup/locks`, {
+      const r = await fetch(`${API}/cleanup/locks`, { method: 'POST', headers: authHeaders() });
+      const d = await r.json();
+      if (r.ok) toast(`🧹 ${d.message || 'Locks aufgeräumt'}`, 'success');
+      else toast(d.detail || 'Fehler', 'error');
+    } catch (err) {
+      toast('Fehler: ' + err.message, 'error');
+    } finally {
+      setLoading(btn, false);
+    }
+  }
+
+  // ── FILE DROP ZONE ────────────────────────────────────────
+  function onDragOver(e) {
+    e.preventDefault();
+    document.getElementById('drop-zone').classList.add('drag-over');
+  }
+
+  function onDragLeave(e) {
+    document.getElementById('drop-zone').classList.remove('drag-over');
+  }
+
+  function onDrop(e) {
+    e.preventDefault();
+    document.getElementById('drop-zone').classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) setSelectedFile(file);
+  }
+
+  function onFileSelected(e) {
+    const file = e.target.files[0];
+    if (file) setSelectedFile(file);
+  }
+
+  function setSelectedFile(file) {
+    selectedFile = file;
+    document.getElementById('file-preview-name').textContent = file.name;
+    document.getElementById('file-preview').classList.add('visible');
+    document.getElementById('btn-upload').disabled = false;
+  }
+
+  function clearFile() {
+    selectedFile = null;
+    document.getElementById('file-preview').classList.remove('visible');
+    document.getElementById('file-preview-name').textContent = '';
+    document.getElementById('btn-upload').disabled = true;
+    document.getElementById('file-input').value = '';
+  }
+
+  // ── UPLOAD: Datei direkt hochladen ────────────────────────
+  async function uploadToLexware() {
+    if (!selectedFile) { toast('Keine Datei ausgewählt', 'error'); return; }
+
+    const btn = document.getElementById('btn-upload');
+    setLoading(btn, true);
+    toast(`⬆ Lade hoch: ${selectedFile.name}...`, 'upload');
+
+    if (debugActive && vncUrl) window.open(vncUrl, 'novnc');
+
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+
+    try {
+      const r = await fetch(`${API}/upload/lexware`, {
         method: 'POST',
-        headers: authHeaders()
+        headers: { 'X-API-Key': apiKey },
+        body: formData
       });
       const d = await r.json();
       if (r.ok) {
-        toast(`🧹 ${d.message || 'Locks aufgeräumt'}`, 'success');
+        toast(`✓ Hochgeladen: ${d.filename}`, 'success');
+        clearFile();
       } else {
-        toast(d.detail || 'Fehler', 'error');
+        toast(d.detail || 'Upload fehlgeschlagen', 'error');
+      }
+    } catch (err) {
+      toast('Fehler: ' + err.message, 'error');
+    } finally {
+      setLoading(btn, false);
+    }
+  }
+
+  // ── DOWNLOAD-LIST laden ───────────────────────────────────
+  async function loadDownloadsList() {
+    const btn  = document.getElementById('btn-refresh-list');
+    const list = document.getElementById('downloads-list');
+    setLoading(btn, true);
+
+    try {
+      const r = await fetch(`${API}/downloads/list`, { headers: authHeaders() });
+      const d = await r.json();
+      list.innerHTML = '';
+
+      if (!d.files || d.files.length === 0) {
+        list.innerHTML = '<div class="file-list-empty">Keine PDFs gefunden</div>';
+        return;
+      }
+
+      d.files.forEach(f => {
+        const el = document.createElement('div');
+        el.className = 'file-item';
+        el.dataset.path = f.path;
+        el.innerHTML = `
+          <span>📄</span>
+          <span class="file-item-name">${f.name}</span>
+          <span class="file-item-size">${(f.size / 1024).toFixed(0)} KB</span>
+        `;
+        el.addEventListener('click', () => selectDownloadFile(el, f.path, f.name));
+        list.appendChild(el);
+      });
+    } catch (err) {
+      list.innerHTML = '<div class="file-list-empty">Fehler beim Laden</div>';
+      toast('Fehler: ' + err.message, 'error');
+    } finally {
+      setLoading(btn, false);
+    }
+  }
+
+  function selectDownloadFile(el, path, name) {
+    document.querySelectorAll('.file-item').forEach(i => i.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedDownloadPath = path;
+    document.getElementById('btn-upload-path').disabled = false;
+    document.getElementById('selected-path-label').textContent = `→ ${name}`;
+  }
+
+  // ── UPLOAD: Lokale Datei hochladen ────────────────────────
+  async function uploadByPath() {
+    if (!selectedDownloadPath) { toast('Keine Datei ausgewählt', 'error'); return; }
+
+    const btn = document.getElementById('btn-upload-path');
+    setLoading(btn, true);
+    toast(`⬆ Lade hoch: ${selectedDownloadPath.split('/').pop()}...`, 'upload');
+
+    if (debugActive && vncUrl) window.open(vncUrl, 'novnc');
+
+    try {
+      const r = await fetch(`${API}/upload/lexware/path`, {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ file_path: selectedDownloadPath })
+      });
+      const d = await r.json();
+      if (r.ok) {
+        toast(`✓ Hochgeladen: ${d.filename}`, 'success');
+        selectedDownloadPath = null;
+        document.getElementById('btn-upload-path').disabled = true;
+        document.getElementById('selected-path-label').textContent = '';
+        document.querySelectorAll('.file-item').forEach(i => i.classList.remove('selected'));
+      } else {
+        toast(d.detail || 'Upload fehlgeschlagen', 'error');
       }
     } catch (err) {
       toast('Fehler: ' + err.message, 'error');
@@ -739,18 +1050,14 @@
   let loggingEnabled = false;
 
   function toggleLogging() {
-    if (loggingEnabled) {
-      disconnectWS();
-    } else {
-      connectWS();
-    }
+    if (loggingEnabled) disconnectWS();
+    else connectWS();
   }
 
   function connectWS() {
-    if (ws && ws.readyState < 2) return; // already open/connecting
+    if (ws && ws.readyState < 2) return;
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsUrl = `${proto}://${location.host}/ws/logs?api_key=${encodeURIComponent(apiKey)}`;
-    ws = new WebSocket(wsUrl);
+    ws = new WebSocket(`${proto}://${location.host}/ws/logs?api_key=${encodeURIComponent(apiKey)}`);
     loggingEnabled = true;
     document.getElementById('log-toggle-btn').textContent = 'logging ✓';
 
@@ -759,17 +1066,12 @@
       document.getElementById('ws-badge').className = 'log-badge connected';
       clearLogPlaceholder();
     };
-
-    ws.onmessage = (e) => {
-      appendLog(e.data);
-    };
-
+    ws.onmessage = (e) => appendLog(e.data);
     ws.onclose = () => {
       document.getElementById('ws-badge').textContent = loggingEnabled ? 'reconnecting...' : 'off';
       document.getElementById('ws-badge').className = 'log-badge';
-      if (loggingEnabled) setTimeout(connectWS, 3000); // reconnect only if still enabled
+      if (loggingEnabled) setTimeout(connectWS, 3000);
     };
-
     ws.onerror = () => ws.close();
   }
 
@@ -783,29 +1085,24 @@
 
   let logEmpty = true;
   function clearLogPlaceholder() {
-    if (logEmpty) {
-      document.getElementById('log-output').innerHTML = '';
-      logEmpty = false;
-    }
+    if (logEmpty) { document.getElementById('log-output').innerHTML = ''; logEmpty = false; }
   }
 
   function appendLog(line) {
     clearLogPlaceholder();
-    const out = document.getElementById('log-output');
+    const out  = document.getElementById('log-output');
     const span = document.createElement('span');
     span.className = 'log-line ' + classifyLine(line);
     span.textContent = line;
     out.appendChild(span);
     out.appendChild(document.createTextNode('\n'));
-
-    // max 2000 lines
     const lines = out.querySelectorAll('.log-line');
     if (lines.length > 2000) lines[0].remove();
-
     if (autoscroll) out.scrollTop = out.scrollHeight;
   }
 
   function classifyLine(line) {
+    if (line.includes('⬆') || line.includes('Upload') || line.includes('hochgeladen')) return 'upload';
     if (line.includes('✅') || line.includes('gespeichert') || line.includes('abgeschlossen')) return 'success';
     if (line.includes('❌') || line.includes('Error') || line.includes('error') || line.includes('500')) return 'error';
     if (line.includes('⚠️') || line.includes('Timeout') || line.includes('nicht gefunden')) return 'warn';
@@ -814,10 +1111,7 @@
     return 'info';
   }
 
-  function clearLog() {
-    document.getElementById('log-output').innerHTML = '';
-    logEmpty = false;
-  }
+  function clearLog() { document.getElementById('log-output').innerHTML = ''; logEmpty = false; }
 
   function toggleAutoscroll() {
     autoscroll = !autoscroll;
@@ -845,10 +1139,8 @@
     setInterval(checkHealth, 15000);
     fetchDebugStatus();
     setInterval(fetchDebugStatus, 10000);
-    // Logging + Debug off by default — user enables manually
   }
 
-  // API Key prüfen — Dialog zeigen wenn nicht gesetzt oder ungültig
   if (apiKey) {
     verifyApiKey(apiKey).then(ok => {
       if (ok) { initApp(); }
