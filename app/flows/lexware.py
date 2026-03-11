@@ -43,12 +43,20 @@ def _login(page):
 
     print(f"🔐 Login als {LW_USER} ...")
     page.goto(LEXWARE_URL, wait_until="domcontentloaded", timeout=TIMEOUT_NAVIGATION)
-    time.sleep(2)
+    # Warten bis eventuelle Redirects abgeschlossen sind
+    time.sleep(4)
+    print(f"📍 URL nach Laden: {page.url}")
 
-    # Prüfen ob schon eingeloggt
-    if "login" not in page.url.lower() and "signin" not in page.url.lower():
+    # Prüfen ob schon eingeloggt — nur wenn Hauptnavigation sichtbar
+    already_logged_in = (
+        "login" not in page.url.lower()
+        and "signin" not in page.url.lower()
+        and page.locator("text=Neuen Beleg erfassen").count() > 0
+    )
+    if already_logged_in:
         print("✅ Bereits eingeloggt (Session noch aktiv)")
         return
+    print("🔑 Login-Seite erkannt — starte Login...")
 
     # Email-Feld füllen — in Firefox funktioniert normales fill() problemlos
     print("📝 Fülle Login-Formular...")
