@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright/python:latest
+FROM mcr.microsoft.com/playwright/python:v1.58.0-jammy
 
 ENV DEBIAN_FRONTEND noninteractive
 ENV DISPLAY :0
