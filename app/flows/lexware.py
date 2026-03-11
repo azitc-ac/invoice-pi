@@ -149,7 +149,7 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v4")
+    print(f"\n🚀 Starte Lexware Upload v5")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
@@ -166,7 +166,11 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
     options.set_preference("dom.webdriver.enabled", False)
     options.set_preference("useAutomationExtension", False)
 
-    service = Service(executable_path=GECKODRIVER, log_path="/tmp/geckodriver.log")
+    service = Service(
+        executable_path=GECKODRIVER,
+        log_path="/tmp/geckodriver.log",
+        service_args=["--setpref", "dom.webdriver.enabled=false"],
+    )
 
     print("🦊 Starte Firefox via Selenium/geckodriver...")
     driver = webdriver.Firefox(service=service, options=options)
