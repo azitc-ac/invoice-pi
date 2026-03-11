@@ -10,7 +10,7 @@ import json
 from playwright.sync_api import sync_playwright
 
 PW_USERDATA = os.getenv("PW_USERDATA_LEXWARE", "/pwdata/lexware")
-LOGIN_URL    = "https://lexware.de"
+LOGIN_URL    = "https://app.lexware.de"
 
 LW_USER = os.getenv("LEXWARE_USERNAME", "")
 LW_PASS = os.getenv("LEXWARE_PASSWORD", "")
