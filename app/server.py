@@ -286,6 +286,27 @@ def list_downloads():
 # API ENDPOINTS - Session Init (manueller Login)
 # ============================================================
 
+ANTI_DETECTION_SCRIPT = """
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){}, app: {} };
+    Object.defineProperty(navigator, 'plugins', {
+        get: () => [
+            { name: 'Chrome PDF Plugin' },
+            { name: 'Chrome PDF Viewer' },
+            { name: 'Native Client' }
+        ],
+    });
+    Object.defineProperty(navigator, 'languages', {
+        get: () => ['de-DE', 'de', 'en-US', 'en'],
+    });
+    const origQuery = window.navigator.permissions.query;
+    window.navigator.permissions.query = (p) => (
+        p.name === 'notifications'
+            ? Promise.resolve({ state: Notification.permission })
+            : origQuery(p)
+    );
+"""
+
 def _open_browser_for_login(site: str):
     from playwright.sync_api import sync_playwright
 
@@ -297,6 +318,7 @@ def _open_browser_for_login(site: str):
             "password": os.getenv("FREENET_PASSWORD", ""),
             "fill_username": "input#username",
             "fill_password": "input#password",
+            "anti_detection": False,
         },
         "netaachen": {
             "url": "https://sso.netcologne.de/cas/login?service=https://meinekundenwelt.netcologne.de/&mandant=na",
@@ -305,38 +327,81 @@ def _open_browser_for_login(site: str):
             "password": os.getenv("NETAACHEN_PASSWORD", ""),
             "fill_username": "input#username",
             "fill_password": "input#password",
+            "anti_detection": False,
         },
         "lexware": {
             "url": "https://app.lexware.de",
             "userdata": os.getenv("PW_USERDATA_LEXWARE", "/pwdata/lexware"),
             "username": os.getenv("LEXWARE_USERNAME", ""),
             "password": os.getenv("LEXWARE_PASSWORD", ""),
-            "fill_username": "input[type='email'], input[name='email'], input[id*='email'], input[id*='user']",
+            "fill_username": "input[type='email']",
             "fill_password": "input[type='password']",
+            "anti_detection": True,  # Lexware erkennt Bots — Anti-Detection aktiv
         },
     }
 
     cfg = configs[site]
 
     with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
+        launch_args = [
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-setuid-sandbox",
+        ]
+        if cfg["anti_detection"]:
+            launch_args += [
+                "--disable-blink-features=AutomationControlled",
+                "--disable-infobars",
+                "--start-maximized",
+            ]
+
+        context_kwargs = dict(
             user_data_dir=cfg["userdata"],
             headless=False,
-            args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-setuid-sandbox"],
+            args=launch_args,
         )
+        if cfg["anti_detection"]:
+            context_kwargs["user_agent"] = (
+                "Mozilla/5.0 (X11; Linux x86_64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            )
+            context_kwargs["viewport"]    = {"width": 1280, "height": 900}
+            context_kwargs["locale"]      = "de-DE"
+            context_kwargs["timezone_id"] = "Europe/Berlin"
+
+        context = p.chromium.launch_persistent_context(**context_kwargs)
+
+        if cfg["anti_detection"]:
+            context.add_init_script(ANTI_DETECTION_SCRIPT)
+
         page = context.new_page()
         print(f"📖 Öffne Login-Seite für {site}: {cfg['url']}")
         page.goto(cfg["url"], wait_until="domcontentloaded")
         time.sleep(2)
 
-        try:
-            if cfg["username"]:
-                page.fill(cfg["fill_username"], cfg["username"])
-            if cfg["password"]:
-                page.fill(cfg["fill_password"], cfg["password"])
-            print(f"✅ Credentials vorausgefüllt für {site} — warte auf manuellen Login...")
-        except Exception as e:
-            print(f"⚠️  Konnte Credentials nicht einfüllen: {e}")
+        if not cfg["anti_detection"]:
+            # Freenet / NetAachen: automatisch vorausfüllen
+            try:
+                if cfg["username"]:
+                    page.fill(cfg["fill_username"], cfg["username"])
+                if cfg["password"]:
+                    page.fill(cfg["fill_password"], cfg["password"])
+                print(f"✅ Credentials vorausgefüllt für {site} — warte auf manuellen Login...")
+            except Exception as e:
+                print(f"⚠️  Konnte Credentials nicht einfüllen: {e}")
+        else:
+            # Lexware: Browser komplett leer öffnen — kein automatisches Ausfüllen.
+            # Lexware erkennt synthetische Events und blockiert den Login-Button.
+            u = cfg["username"] or "(nicht in .env — LEXWARE_USERNAME)"
+            pw_hint = cfg["password"][:2] + "***" if cfg["password"] else "(nicht in .env — LEXWARE_PASSWORD)"
+            print(f"")
+            print(f"🔐 Bitte manuell im Browser eingeben:")
+            print(f"   👤 {u}")
+            print(f"   🔑 {pw_hint}")
+            print(f"")
+            print(f"👉 Daten eingeben → Anmelden klicken → warten bis eingeloggt.")
+            print(f"   Browser schließt automatisch nach 5 Minuten.")
 
         time.sleep(300)
         print(f"⏰ Timeout erreicht, Browser wird geschlossen. Session gespeichert in {cfg['userdata']}")

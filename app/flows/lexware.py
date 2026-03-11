@@ -65,9 +65,25 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
                 "--disable-dev-shm-usage",
                 "--disable-blink-features=AutomationControlled",
                 "--disable-setuid-sandbox",
+                "--disable-infobars",
             ],
+            user_agent=(
+                "Mozilla/5.0 (X11; Linux x86_64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+            viewport={"width": 1280, "height": 900},
+            locale="de-DE",
+            timezone_id="Europe/Berlin",
             accept_downloads=False,
         )
+
+        # Anti-Bot-Detection
+        context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){}, app: {} };
+            Object.defineProperty(navigator, 'languages', { get: () => ['de-DE', 'de', 'en-US', 'en'] });
+        """)
 
         page = context.new_page()
 
