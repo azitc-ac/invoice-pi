@@ -114,7 +114,12 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
     print(f"🦊 Browser: {FF_BIN}")
     print(f"📁 Profil: {FF_PROFILE}")
 
+    # Frisches Profil bei jedem Upload — verhindert verbrannte Profile
+    import shutil
+    if Path(FF_PROFILE).exists():
+        shutil.rmtree(FF_PROFILE)
     Path(FF_PROFILE).mkdir(parents=True, exist_ok=True)
+    print("🧹 Frisches Profil erstellt")
     _kill_firefox()
 
     # ── Firefox starten ──────────────────────────────────────────
@@ -170,9 +175,9 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
         print("✅ Anmelden gedrückt — warte auf Redirect...")
 
         final_url = _wait_url(wid, not_contains="signin", timeout=45)
-        if not final_url or "signin" in final_url.lower() or "login" in final_url.lower():
+        if not final_url or "signin" in final_url.lower() or "login" in final_url.lower() or "403" in final_url or "forbidden" in final_url.lower():
             _kill_firefox()
-            raise RuntimeError("Login fehlgeschlagen. Credentials prüfen.")
+            raise RuntimeError(f"Login fehlgeschlagen. URL: {final_url}")
 
         print(f"✅ Eingeloggt! URL: {final_url}")
         time.sleep(3)
