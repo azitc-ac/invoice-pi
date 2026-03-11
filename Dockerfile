@@ -55,7 +55,7 @@ COPY app /app
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Install dependencies
-RUN pip install --no-cache-dir fastapi uvicorn[standard] playwright
+RUN pip install --no-cache-dir fastapi uvicorn[standard] playwright python-multipart
 
 # Ensure Chromium is installed
 RUN playwright install --with-deps chromium
