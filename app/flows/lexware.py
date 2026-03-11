@@ -92,7 +92,7 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v9")
+    print(f"\n🚀 Starte Lexware Upload v10")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
@@ -140,6 +140,10 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
             pass
         time.sleep(1)
 
+        # Warten bis Cookie-Banner erscheint (lädt verzögert)
+        print("⏳ Warte auf Cookie-Banner...")
+        time.sleep(4)
+
         # Debug: alle Buttons ausgeben
         buttons = page.evaluate("""
 Array.from(document.querySelectorAll('button, a, [role="button"]'))
@@ -147,7 +151,7 @@ Array.from(document.querySelectorAll('button, a, [role="button"]'))
     .filter(t => t.trim())
     .map(t => t.trim().substring(0, 60))
 """)
-        print(f"🔍 Sichtbare Buttons: {buttons[:10]}")
+        print(f"🔍 Sichtbare Buttons: {buttons[:15]}")
 
         _dismiss_cookie_banner(page)
 
