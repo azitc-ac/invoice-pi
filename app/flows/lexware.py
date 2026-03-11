@@ -118,7 +118,7 @@ def _login_with_xdotool(wid: str):
 def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
     """
     Lädt eine Datei als neuen Beleg in Lexware hoch.
-    Phase 1: Echter firefox-esr via xdotool für den Login (kein Playwright-Fingerprint)
+    Phase 1: Echter firefox via xdotool für den Login (kein Playwright-Fingerprint)
     Phase 2: Playwright-Firefox mit gespeicherter Session für den Upload-Flow
     """
 
@@ -135,13 +135,13 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
     Path(FF_PROFILE).mkdir(parents=True, exist_ok=True)
 
     # Alte Firefox-Instanzen killen
-    subprocess.run("pkill -f firefox-esr 2>/dev/null", shell=True)
+    subprocess.run("pkill -f firefox 2>/dev/null", shell=True)
     time.sleep(1)
 
     # ── Phase 1: Echter Firefox für Login ───────────────────────
     print("🦊 Starte echten Firefox für Login...")
     subprocess.Popen(
-        f"DISPLAY={DISPLAY} firefox-esr --profile {FF_PROFILE} --new-window '{LEXWARE_URL}'",
+        f"DISPLAY={DISPLAY} firefox --profile {FF_PROFILE} --new-window '{LEXWARE_URL}'",
         shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
 
@@ -171,7 +171,7 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
             print("✅ Bereits eingeloggt")
 
     finally:
-        subprocess.run("pkill -f firefox-esr 2>/dev/null", shell=True)
+        subprocess.run("pkill -f firefox 2>/dev/null", shell=True)
         time.sleep(2)
 
     # ── Phase 2: Playwright-Firefox für Upload-Flow ──────────────
