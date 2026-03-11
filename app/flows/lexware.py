@@ -19,20 +19,6 @@ def _fresh_profile():
     if Path(FF_PROFILE).exists():
         shutil.rmtree(FF_PROFILE)
     Path(FF_PROFILE).mkdir(parents=True, exist_ok=True)
-    # Welcome-Screen und erste-Start-Popups deaktivieren
-    user_js = Path(FF_PROFILE) / "user.js"
-    user_js.write_text("""
-user_pref("browser.startup.homepage_override.mstone", "ignore");
-user_pref("startup.homepage_welcome_url", "");
-user_pref("startup.homepage_welcome_url.additional", "");
-user_pref("browser.aboutwelcome.enabled", false);
-user_pref("trailhead.firstrun.didSeeAboutWelcome", true);
-user_pref("toolkit.telemetry.reportingpolicy.firstRun", false);
-user_pref("browser.shell.checkDefaultBrowser", false);
-user_pref("browser.shell.didSkipDefaultBrowserCheckOnFirstRun", true);
-user_pref("datareporting.policy.dataSubmissionPolicyAccepted", true);
-user_pref("datareporting.policy.dataSubmissionPolicyBypassNotification", true);
-""")
     print(f"🧹 Frisches Profil: {FF_PROFILE}")
 
 
@@ -72,20 +58,19 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
             timezone_id="Europe/Berlin",
         )
 
-        # Neuen Tab öffnen und zu Lexware navigieren
+        # Welcome-Tabs sofort schließen, dann Lexware öffnen
+        time.sleep(2)
+        for p2 in ctx.pages:
+            try:
+                p2.close()
+            except Exception:
+                pass
+
         page = ctx.new_page()
         print(f"📖 Öffne {LEXWARE_URL}...")
         page.goto(LEXWARE_URL, wait_until="domcontentloaded", timeout=TIMEOUT_NAV)
         page.bring_to_front()
-
-        # Alle anderen Tabs (Welcome, Privacy Notice etc.) schließen
-        for p2 in ctx.pages:
-            if p2 != page:
-                try:
-                    p2.close()
-                except Exception:
-                    pass
-        time.sleep(3)
+        time.sleep(4)
 
         print(f"📍 URL: {page.url}")
         print(f"🔍 navigator.webdriver: {page.evaluate('navigator.webdriver')}")
