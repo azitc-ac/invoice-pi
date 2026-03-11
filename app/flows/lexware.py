@@ -3,36 +3,17 @@ import time
 import shutil
 from pathlib import Path
 from selenium import webdriver
-from selenium.webdriver.firefox.options import Options
-from selenium.webdriver.firefox.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 
-LW_USER     = os.getenv("LEXWARE_USERNAME", "")
-LW_PASS     = os.getenv("LEXWARE_PASSWORD", "")
-FF_PROFILE  = os.getenv("FF_PROFILE_LEXWARE", "/pwdata/lexware-ff")
-FF_BIN      = "/usr/bin/firefox"
-GECKODRIVER = "/usr/local/bin/geckodriver"
+LW_USER      = os.getenv("LEXWARE_USERNAME", "")
+LW_PASS      = os.getenv("LEXWARE_PASSWORD", "")
+CHROMIUM_BIN = "/usr/bin/chromium-browser"
+CHROMEDRIVER = "/usr/bin/chromedriver"
 
 LEXWARE_LOGIN_URL   = "https://app.lexware.de"
 LEXWARE_VOUCHER_URL = "https://app.lexware.de/vouchers#!/VoucherList/?filter=accounting&vouchereditoropen=true"
-
-
-def _fresh_profile():
-    if Path(FF_PROFILE).exists():
-        shutil.rmtree(FF_PROFILE)
-    Path(FF_PROFILE).mkdir(parents=True, exist_ok=True)
-    (Path(FF_PROFILE) / "user.js").write_text("""
-user_pref("dom.webdriver.enabled", false);
-user_pref("useAutomationExtension", false);
-user_pref("browser.aboutwelcome.enabled", false);
-user_pref("startup.homepage_welcome_url", "");
-user_pref("browser.shell.checkDefaultBrowser", false);
-user_pref("datareporting.policy.dataSubmissionPolicyAccepted", true);
-user_pref("datareporting.policy.dataSubmissionPolicyBypassNotification", true);
-""")
-    print(f"🧹 Frisches Profil: {FF_PROFILE}")
 
 
 def _wait_for_element(driver, by, selector, timeout=25):
@@ -86,8 +67,6 @@ return findAndClick(document);
 
 
 def _get_file_input(driver, timeout=20):
-    """File-Input finden — auch versteckt, auch in Shadow DOM."""
-    # Normal
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
@@ -97,8 +76,7 @@ def _get_file_input(driver, timeout=20):
         except Exception:
             pass
         time.sleep(0.3)
-
-    # Shadow DOM Walk
+    # Shadow DOM fallback
     js = """
 var results = [];
 function walk(root) {
@@ -115,7 +93,6 @@ return results;
 """
     els = driver.execute_script(js)
     if els:
-        print("✅ File-Input via Shadow-DOM gefunden")
         return els[0]
     return None
 
@@ -149,37 +126,28 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v5")
+    print(f"\n🚀 Starte Lexware Upload v6")
     print(f"📄 Datei: {abs_path}")
 
-    _fresh_profile()
-
     options = Options()
-    options.binary_location = FF_BIN
+    options.binary_location = CHROMIUM_BIN
     options.add_argument("--no-sandbox")
-    options.add_argument("--width=1280")
-    options.add_argument("--height=900")
-    # Profil mit user.js (dom.webdriver.enabled=false) übergeben
-    options.add_argument(f"--profile")
-    options.add_argument(FF_PROFILE)
-    # Geckodriver-Pref via capability
-    options.set_preference("dom.webdriver.enabled", False)
-    options.set_preference("useAutomationExtension", False)
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--window-size=1280,900")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option("useAutomationExtension", False)
 
-    service = Service(
-        executable_path=GECKODRIVER,
-        log_path="/tmp/geckodriver.log",
-        service_args=["--setpref", "dom.webdriver.enabled=false"],
-    )
+    service = Service(executable_path=CHROMEDRIVER, log_path="/tmp/chromedriver.log")
 
-    print("🦊 Starte Firefox via Selenium/geckodriver...")
-    driver = webdriver.Firefox(service=service, options=options)
-    driver.set_window_size(1280, 900)
+    print("🌐 Starte Chromium via Selenium...")
+    driver = webdriver.Chrome(service=service, options=options)
+    driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
     try:
-        # ── Login ─────────────────────────────────────────────────
         print(f"📖 Öffne {LEXWARE_LOGIN_URL}...")
         driver.get(LEXWARE_LOGIN_URL)
+        time.sleep(3)
         print(f"📍 URL: {driver.current_url}")
         print(f"🔍 navigator.webdriver: {driver.execute_script('return navigator.webdriver')}")
 
@@ -188,7 +156,6 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
         if any(x in driver.current_url.lower() for x in ["signin", "login", "authenticate"]):
             print(f"🔐 Login als {LW_USER}...")
 
-            # Email-Feld
             user_field = None
             for sel in ["#username", "input[name='username']", "input[type='email']", "input[autocomplete='username']"]:
                 try:
@@ -202,7 +169,6 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
             user_field.send_keys(LW_USER)
             print("✅ Email eingegeben")
 
-            # Passwort-Feld
             pass_field = None
             for sel in ["#password", "input[name='password']", "input[type='password']"]:
                 try:
@@ -216,29 +182,16 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
             pass_field.send_keys(LW_PASS)
             print("✅ Passwort eingegeben")
 
-            # Anmelden-Button — erst normaler Click, dann JS-Fallback
-            clicked = False
             try:
                 btn = _wait_for_element(driver, By.XPATH,
                     "//button[contains(.,'Anmelden') or contains(.,'Login') or contains(.,'Weiter') or @type='submit']",
                     timeout=10)
-                print(f"🖱️  Button gefunden: '{btn.text}' enabled={btn.is_enabled()}")
+                print(f"🖱️  Button: '{btn.text}'")
                 driver.execute_script("arguments[0].click();", btn)
-                clicked = True
-                print("✅ Anmelden per JS-Click")
-            except Exception as e:
-                print(f"⚠️  Button nicht gefunden: {e}")
-
-            if not clicked:
-                try:
-                    pass_field.submit()
-                    print("✅ Anmelden per form.submit()")
-                except Exception as e:
-                    print(f"⚠️  submit() fehlgeschlagen: {e}")
-
+            except Exception:
+                pass_field.submit()
             print("⏳ Warte auf Redirect...")
 
-            # Warten auf erfolgreichen Login
             deadline = time.time() + 45
             last_url = ""
             while time.time() < deadline:
@@ -247,25 +200,23 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
                     print(f"📍 URL: {url}")
                     last_url = url
                 if not any(x in url.lower() for x in ["signin", "login", "authenticate", "403", "forbidden"]):
-                    print(f"✅ Eingeloggt! URL: {url}")
+                    print(f"✅ Eingeloggt!")
                     break
-                if "403" in url or "forbidden" in url.lower():
-                    raise RuntimeError(f"403 Forbidden — WAF blockt (navigator.webdriver=true)")
                 time.sleep(1)
             else:
-                raise RuntimeError(f"Login-Timeout nach 45s. Letzte URL: {driver.current_url}")
+                raise RuntimeError(f"Login-Timeout. URL: {driver.current_url}")
 
             time.sleep(2)
         else:
             print("✅ Bereits eingeloggt")
 
-        # ── Direkt zum Voucher-Editor ──────────────────────────────
+        # ── Voucher-Editor ────────────────────────────────────────
         print(f"📖 Öffne Voucher-Editor...")
         driver.get(LEXWARE_VOUCHER_URL)
         time.sleep(3)
         print(f"📍 URL: {driver.current_url}")
 
-        # ── File-Input finden ──────────────────────────────────────
+        # ── File-Input ────────────────────────────────────────────
         print("🖱️  Suche File-Input...")
         fi = _get_file_input(driver, timeout=20)
         if not fi:
@@ -274,33 +225,29 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
         _make_file_input_visible(driver, fi)
         time.sleep(0.3)
 
-        # Zähler vor Upload
         count_before = _get_badge_count(driver)
         print(f"📊 Badge-Zähler vor Upload: {count_before}")
 
-        # Datei setzen
         fi.send_keys(abs_path)
         print(f"✅ Datei gesetzt: {filename}")
         time.sleep(3)
 
-        # ── Upload-Bestätigung per Badge-Zähler ───────────────────
+        # ── Bestätigung ───────────────────────────────────────────
         print("⏳ Warte auf Upload-Bestätigung...")
         for attempt in range(10):
             print(f"   🔄 Refresh {attempt + 1}/10...")
             driver.refresh()
             time.sleep(4)
-
             count_after = _get_badge_count(driver)
-            print(f"   📊 Badge-Zähler: {count_after}")
-
+            print(f"   📊 Badge: {count_after}")
             if count_after is not None and count_before is not None and count_after > count_before:
-                print(f"✅ Upload bestätigt! Zähler: {count_before} → {count_after}")
+                print(f"✅ Upload bestätigt! {count_before} → {count_after}")
                 break
             elif count_after is None and count_before is None:
-                print("ℹ️  Badge nicht gefunden — Upload vermutlich erfolgreich")
+                print("ℹ️  Badge nicht gefunden — vermutlich ok")
                 break
         else:
-            print("⚠️  Timeout — Datei wurde möglicherweise trotzdem hochgeladen")
+            print("⚠️  Timeout — möglicherweise trotzdem hochgeladen")
 
         print(f"\n✅ Upload abgeschlossen: {filename}")
 
