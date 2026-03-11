@@ -58,16 +58,19 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
             timezone_id="Europe/Berlin",
         )
 
-        # Welcome-Tab schließen, Lexware-Tab nutzen
+        # Welcome-Tabs sofort schließen, dann Lexware öffnen
+        time.sleep(2)
+        for p2 in ctx.pages:
+            try:
+                p2.close()
+            except Exception:
+                pass
+
         page = ctx.new_page()
         print(f"📖 Öffne {LEXWARE_URL}...")
         page.goto(LEXWARE_URL, wait_until="domcontentloaded", timeout=TIMEOUT_NAV)
+        page.bring_to_front()
         time.sleep(4)
-
-        # Welcome-Tabs schließen
-        for p2 in ctx.pages:
-            if p2 != page and "lexware" not in p2.url.lower():
-                p2.close()
 
         print(f"📍 URL: {page.url}")
         print(f"🔍 navigator.webdriver: {page.evaluate('navigator.webdriver')}")
