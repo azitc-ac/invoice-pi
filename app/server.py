@@ -330,7 +330,7 @@ def _open_browser_for_login(site: str):
             "anti_detection": False,
         },
         "lexware": {
-            "url": "https://lexware.de",
+            "url": "https://app.lexware.de",
             "userdata": os.getenv("PW_USERDATA_LEXWARE", "/pwdata/lexware"),
             "username": os.getenv("LEXWARE_USERNAME", ""),
             "password": os.getenv("LEXWARE_PASSWORD", ""),
@@ -390,22 +390,112 @@ def _open_browser_for_login(site: str):
                 print(f"✅ Credentials vorausgefüllt für {site} — warte auf manuellen Login...")
             except Exception as e:
                 print(f"⚠️  Konnte Credentials nicht einfüllen: {e}")
+            time.sleep(300)
+            print(f"⏰ Timeout, Browser wird geschlossen.")
+            context.close()
         else:
-            # Lexware: Browser komplett leer öffnen — kein automatisches Ausfüllen.
-            # Lexware erkennt synthetische Events und blockiert den Login-Button.
-            u = cfg["username"] or "(nicht in .env — LEXWARE_USERNAME)"
-            pw_hint = cfg["password"][:2] + "***" if cfg["password"] else "(nicht in .env — LEXWARE_PASSWORD)"
-            print(f"")
-            print(f"🔐 Bitte manuell im Browser eingeben:")
-            print(f"   👤 {u}")
-            print(f"   🔑 {pw_hint}")
-            print(f"")
-            print(f"👉 Daten eingeben → Anmelden klicken → warten bis eingeloggt.")
-            print(f"   Browser schließt automatisch nach 5 Minuten.")
+            # Lexware: Credentials per Clipboard-Paste einfügen (umgeht Event-Detection)
+            # dann warten bis User eingeloggt ist, dann Storage State explizit speichern
+            u  = cfg["username"] or ""
+            pw = cfg["password"] or ""
+            print(f"🔐 Fülle Credentials per Clipboard ein...")
 
-        time.sleep(300)
-        print(f"⏰ Timeout erreicht, Browser wird geschlossen. Session gespeichert in {cfg['userdata']}")
-        context.close()
+            try:
+                # Email per JS Clipboard + Paste-Event einfügen
+                email_selectors = [
+                    "input[type=\'email\']",
+                    "input[name=\'email\']",
+                    "input[placeholder*=\'Mail\']",
+                    "input[placeholder*=\'mail\']",
+                ]
+                for sel in email_selectors:
+                    try:
+                        el = page.locator(sel).first
+                        if el.count() > 0 and el.is_visible():
+                            el.click()
+                            time.sleep(0.3)
+                            # Clipboard setzen und Paste-Event auslösen
+                            page.evaluate(f"""
+                                const el = document.querySelector(\'{sel}\');
+                                if (el) {{
+                                    el.focus();
+                                    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                                        window.HTMLInputElement.prototype, \'value\'
+                                    ).set;
+                                    nativeInputValueSetter.call(el, \'{u}\');
+                                    el.dispatchEvent(new Event(\'input\', {{ bubbles: true }}));
+                                    el.dispatchEvent(new Event(\'change\', {{ bubbles: true }}));
+                                }}
+                            """)
+                            print(f"✅ Email gesetzt via React-Event")
+                            break
+                    except Exception:
+                        continue
+
+                time.sleep(0.5)
+
+                # Passwort gleicher Ansatz
+                try:
+                    pwd_el = page.locator("input[type=\'password\']").first
+                    if pwd_el.count() > 0 and pwd_el.is_visible():
+                        pwd_el.click()
+                        time.sleep(0.3)
+                        page.evaluate(f"""
+                            const el = document.querySelector(\'input[type=\"password\"\');
+                            if (el) {{
+                                el.focus();
+                                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                                    window.HTMLInputElement.prototype, \'value\'
+                                ).set;
+                                nativeInputValueSetter.call(el, \'{pw}\');
+                                el.dispatchEvent(new Event(\'input\', {{ bubbles: true }}));
+                                el.dispatchEvent(new Event(\'change\', {{ bubbles: true }}));
+                            }}
+                        """)
+                        print(f"✅ Passwort gesetzt via React-Event")
+                except Exception as e:
+                    print(f"⚠️  Passwort-Feld: {e}")
+
+                print(f"")
+                print(f"👉 Bitte jetzt auf \'Anmelden\' klicken!")
+                print(f"   Warte bis eingeloggt, dann wird Session gespeichert...")
+
+            except Exception as e:
+                print(f"⚠️  Clipboard-Methode fehlgeschlagen: {e}")
+                print(f"👉 Bitte manuell einloggen (User: {u})")
+
+            # Warten bis User eingeloggt ist — prüfe URL alle 5s
+            print(f"⏳ Warte auf erfolgreichen Login (max 10 Minuten)...")
+            deadline = time.time() + 600
+            logged_in = False
+            while time.time() < deadline:
+                try:
+                    current_url = page.url
+                    # Eingeloggt wenn URL nicht mehr auf Login-Seite zeigt
+                    if "login" not in current_url.lower() and "signin" not in current_url.lower() and "app.lexware.de" in current_url:
+                        logged_in = True
+                        print(f"✅ Login erkannt! URL: {current_url}")
+                        break
+                except Exception:
+                    pass
+                time.sleep(5)
+
+            if logged_in:
+                # Explizit Storage State speichern — sichert Cookies auch für httpOnly Session-Cookies
+                storage_path = os.path.join(cfg["userdata"], "playwright-storage.json")
+                try:
+                    context.storage_state(path=storage_path)
+                    print(f"✅ Storage State gespeichert: {storage_path}")
+                except Exception as e:
+                    print(f"⚠️  Storage State Fehler: {e}")
+                # Noch 30s eingeloggt bleiben damit alle Cookies flushen
+                print(f"⏳ Warte 30s damit alle Cookies gespeichert werden...")
+                time.sleep(30)
+            else:
+                print(f"⚠️  Login-Timeout — Session möglicherweise nicht gespeichert")
+
+            context.close()
+            print(f"✅ Browser geschlossen. Session in {cfg['userdata']}")
 
 
 @app.post("/session/init")

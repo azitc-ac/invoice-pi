@@ -85,6 +85,20 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
             Object.defineProperty(navigator, 'languages', { get: () => ['de-DE', 'de', 'en-US', 'en'] });
         """)
 
+        # Storage State laden falls vorhanden (enthält httpOnly Session-Cookies)
+        storage_path = os.path.join(PW_USERDATA, "playwright-storage.json")
+        if os.path.isfile(storage_path):
+            try:
+                import json as _json
+                with open(storage_path) as _f:
+                    state = _json.load(_f)
+                cookies = state.get("cookies", [])
+                if cookies:
+                    context.add_cookies(cookies)
+                    print(f"✅ {len(cookies)} Session-Cookie(s) aus Storage State geladen")
+            except Exception as e:
+                print(f"⚠️  Storage State konnte nicht geladen werden: {e}")
+
         page = context.new_page()
 
         # ── 1. Navigation ────────────────────────────────────────
