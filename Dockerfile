@@ -13,11 +13,15 @@ RUN apt-get update && apt-get -y install \
 RUN apt-get update && apt-get install -y websockify && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
-# Install firefox-esr + xdotool + xclip for real browser login
+# Install firefox + xdotool + xclip for real browser login (firefox-esr not available on arm64/jammy)
 RUN apt-get update && apt-get install -y \
-    firefox-esr \
     xdotool \
     xclip && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+RUN add-apt-repository -y ppa:mozillateam/ppa && \
+    apt-get update && \
+    apt-get install -y firefox-esr && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 # Download noVNC
