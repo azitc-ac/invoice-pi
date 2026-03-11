@@ -343,34 +343,35 @@ def _open_browser_for_login(site: str):
     cfg = configs[site]
 
     with sync_playwright() as p:
-        launch_args = [
-            "--no-sandbox",
-            "--disable-dev-shm-usage",
-            "--disable-setuid-sandbox",
-        ]
         if cfg["anti_detection"]:
-            launch_args += [
-                "--disable-blink-features=AutomationControlled",
-                "--disable-infobars",
-                "--start-maximized",
-            ]
-
-        context_kwargs = dict(
-            user_data_dir=cfg["userdata"],
-            headless=False,
-            args=launch_args,
-        )
-        if cfg["anti_detection"]:
-            context_kwargs["user_agent"] = (
-                "Mozilla/5.0 (X11; Linux x86_64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
+            # Firefox: keine Chromium-spezifischen Args
+            context_kwargs = dict(
+                user_data_dir=cfg["userdata"],
+                headless=False,
+                args=[],
+                user_agent=(
+                    "Mozilla/5.0 (X11; Linux x86_64; rv:121.0) "
+                    "Gecko/20100101 Firefox/121.0"
+                ),
+                viewport={"width": 1280, "height": 900},
+                locale="de-DE",
+                timezone_id="Europe/Berlin",
             )
-            context_kwargs["viewport"]    = {"width": 1280, "height": 900}
-            context_kwargs["locale"]      = "de-DE"
-            context_kwargs["timezone_id"] = "Europe/Berlin"
+        else:
+            # Chromium für Freenet / NetAachen
+            context_kwargs = dict(
+                user_data_dir=cfg["userdata"],
+                headless=False,
+                args=[
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-setuid-sandbox",
+                ],
+            )
 
-        context = p.chromium.launch_persistent_context(**context_kwargs)
+        # Lexware: Firefox nutzen (umgeht AWS WAF Bot-Erkennung die Chromium blockiert)
+        browser_type = p.firefox if cfg["anti_detection"] else p.chromium
+        context = browser_type.launch_persistent_context(**context_kwargs)
 
         if cfg["anti_detection"]:
             context.add_init_script(ANTI_DETECTION_SCRIPT)

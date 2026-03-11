@@ -57,20 +57,14 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
     _remove_locks()
 
     with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
+        # Firefox nutzen — umgeht AWS WAF Bot-Erkennung die Chromium blockiert
+        context = p.firefox.launch_persistent_context(
             user_data_dir=PW_USERDATA,
             headless=headless,
-            args=[
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-blink-features=AutomationControlled",
-                "--disable-setuid-sandbox",
-                "--disable-infobars",
-            ],
+            args=[],  # Firefox braucht keine Chromium-spezifischen Args
             user_agent=(
-                "Mozilla/5.0 (X11; Linux x86_64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
+                "Mozilla/5.0 (X11; Linux x86_64; rv:121.0) "
+                "Gecko/20100101 Firefox/121.0"
             ),
             viewport={"width": 1280, "height": 900},
             locale="de-DE",
