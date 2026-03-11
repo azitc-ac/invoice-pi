@@ -13,13 +13,11 @@ RUN apt-get update && apt-get -y install \
 RUN apt-get update && apt-get install -y websockify && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
-# Install firefox + xdotool + xclip for real browser login
-RUN apt-get update && apt-get install -y \
-    firefox \
-    xdotool \
-    xclip && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Install Firefox from Mozilla APT repo (official ARM64 support) + xdotool + xclip
+RUN wget -q https://packages.mozilla.org/apt/repo-signing-key.gpg -O /etc/apt/keyrings/packages.mozilla.org.asc && \
+    echo "deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main" > /etc/apt/sources.list.d/mozilla.list && \
+    apt-get update && apt-get install -y firefox xdotool xclip && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 # Download noVNC
 RUN mkdir -p /root && \
     cd /root && \
