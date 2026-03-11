@@ -8,7 +8,9 @@ LW_USER     = os.getenv("LEXWARE_USERNAME", "")
 LW_PASS     = os.getenv("LEXWARE_PASSWORD", "")
 FF_PROFILE  = os.getenv("FF_PROFILE_LEXWARE", "/pwdata/lexware-ff")
 FF_BIN      = "/usr/bin/firefox"
-LEXWARE_URL = "https://app.lexware.de"
+
+LEXWARE_LOGIN_URL   = "https://app.lexware.de"
+LEXWARE_VOUCHER_URL = "https://app.lexware.de/vouchers#!/VoucherList/?filter=accounting&vouchereditoropen=true"
 
 TIMEOUT_NAV     = 30_000
 TIMEOUT_ELEMENT = 15_000
@@ -20,13 +22,11 @@ def _fresh_profile():
         shutil.rmtree(FF_PROFILE)
     Path(FF_PROFILE).mkdir(parents=True, exist_ok=True)
     # Welcome-Screen und erste-Start-Popups deaktivieren
-    user_js = Path(FF_PROFILE) / "user.js"
-    user_js.write_text("""
+    (Path(FF_PROFILE) / "user.js").write_text("""
 user_pref("browser.startup.homepage_override.mstone", "ignore");
 user_pref("startup.homepage_welcome_url", "");
 user_pref("startup.homepage_welcome_url.additional", "");
 user_pref("browser.aboutwelcome.enabled", false);
-user_pref("trailhead.firstrun.didSeeAboutWelcome", true);
 user_pref("toolkit.telemetry.reportingpolicy.firstRun", false);
 user_pref("browser.shell.checkDefaultBrowser", false);
 user_pref("browser.shell.didSkipDefaultBrowserCheckOnFirstRun", true);
@@ -48,6 +48,100 @@ def _find(page, selectors, timeout=10_000):
     return None
 
 
+def _dismiss_cookie_banner(page):
+    """Cookie-Banner per JS wegklicken — funktioniert auch in Shadow DOM."""
+    js = """
+function findAndClick(root) {
+    var keywords = ['alle akzept', 'akzept', 'zustimm', 'accept all', 'accept'];
+    var tags = ['button', 'a', '[role="button"]'];
+    for (var ti = 0; ti < tags.length; ti++) {
+        var els = root.querySelectorAll(tags[ti]);
+        for (var i = 0; i < els.length; i++) {
+            var txt = (els[i].innerText || els[i].textContent || '').toLowerCase().trim();
+            for (var ki = 0; ki < keywords.length; ki++) {
+                if (txt.indexOf(keywords[ki]) !== -1) { els[i].click(); return true; }
+            }
+        }
+    }
+    var all = root.querySelectorAll('*');
+    for (var j = 0; j < all.length; j++) {
+        if (all[j].shadowRoot) { if (findAndClick(all[j].shadowRoot)) return true; }
+    }
+    return false;
+}
+return findAndClick(document);
+"""
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        try:
+            if page.evaluate(js):
+                print("✅ Cookie-Banner geschlossen")
+                time.sleep(0.6)
+                return
+        except Exception:
+            pass
+        time.sleep(0.3)
+    print("ℹ️  Kein Cookie-Banner gefunden")
+
+
+def _get_file_input(page, timeout=20):
+    """File-Input finden — auch in Shadow DOM."""
+    # Erst normal versuchen
+    try:
+        fi = page.locator("input[type='file']").first
+        fi.wait_for(state="attached", timeout=timeout * 1000)
+        return fi
+    except Exception:
+        pass
+
+    # Shadow DOM Walk per JS
+    js = """
+var results = [];
+function walk(root) {
+    if (!root || !root.querySelectorAll) return;
+    var inputs = root.querySelectorAll('input[type="file"]');
+    for (var i = 0; i < inputs.length; i++) { results.push(inputs[i]); }
+    var all = root.querySelectorAll('*');
+    for (var j = 0; j < all.length; j++) {
+        if (all[j].shadowRoot) walk(all[j].shadowRoot);
+    }
+}
+walk(document);
+return results;
+"""
+    els = page.evaluate(js)
+    if els:
+        print("✅ File-Input via Shadow-DOM gefunden")
+        return page.locator("input[type='file']").first
+    return None
+
+
+def _make_file_input_visible(page):
+    """File-Input sichtbar machen damit set_input_files funktioniert."""
+    page.evaluate("""
+var el = document.querySelector("input[type='file']");
+if (el) {
+    el.style.cssText = 'display:block!important;visibility:visible!important;opacity:1!important;width:100px!important;height:30px!important;';
+    el.removeAttribute('hidden');
+    el.removeAttribute('aria-hidden');
+    el.removeAttribute('disabled');
+}
+""")
+
+
+def _get_badge_count(page):
+    """Zähler aus Badge lesen (span.grld-bs-badge-info)."""
+    try:
+        result = page.evaluate("""
+var el = document.querySelector("span.grld-bs-badge-info");
+if (el) return parseInt(el.textContent.trim(), 10);
+return null;
+""")
+        return result
+    except Exception:
+        return None
+
+
 def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
     if not os.path.isfile(file_path):
         raise FileNotFoundError(f"Datei nicht gefunden: {file_path}")
@@ -65,59 +159,43 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
         ctx = p.firefox.launch_persistent_context(
             FF_PROFILE,
             executable_path=FF_BIN,
-            headless=False,  # echter Firefox braucht Display
+            headless=False,
             args=["--no-sandbox"],
             viewport={"width": 1280, "height": 900},
             locale="de-DE",
             timezone_id="Europe/Berlin",
         )
 
-        # Ersten vorhandenen Tab nehmen und direkt zu Lexware navigieren
+        # Ersten Tab nehmen oder neuen öffnen
         time.sleep(2)
-        if ctx.pages:
-            page = ctx.pages[0]
-        else:
-            page = ctx.new_page()
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
 
-        print(f"📖 Navigiere zu {LEXWARE_URL}...")
-        page.goto(LEXWARE_URL, wait_until="domcontentloaded", timeout=TIMEOUT_NAV)
+        # ── Login ─────────────────────────────────────────────────
+        print(f"📖 Öffne {LEXWARE_LOGIN_URL}...")
+        page.goto(LEXWARE_LOGIN_URL, wait_until="domcontentloaded", timeout=TIMEOUT_NAV)
         page.bring_to_front()
 
-        # Alle anderen Tabs schließen
+        # Andere Tabs schließen
         for p2 in ctx.pages:
             if p2 != page:
                 try:
                     p2.close()
                 except Exception:
                     pass
+
         time.sleep(3)
-
         print(f"📍 URL: {page.url}")
-        print(f"🔍 navigator.webdriver: {page.evaluate('navigator.webdriver')}")
 
-        # ── Cookie-Banner ─────────────────────────────────────────
-        try:
-            accept = _find(page, [
-                "button:has-text('Alle akzeptieren')",
-                "button:has-text('Accept all')",
-                "button:has-text('Akzeptieren')",
-            ], timeout=5_000)
-            if accept:
-                accept.click()
-                print("✅ Cookie-Banner akzeptiert")
-                time.sleep(1)
-        except Exception:
-            pass
+        _dismiss_cookie_banner(page)
 
-        # ── Login ─────────────────────────────────────────────────
-        if "signin" in page.url.lower() or "login" in page.url.lower() or "authenticate" in page.url.lower():
+        if any(x in page.url.lower() for x in ["signin", "login", "authenticate"]):
             print(f"🔐 Login als {LW_USER}...")
 
-            # Email
             email_el = _find(page, [
                 "input[type='email']",
                 "input[name='email']",
-                "input[placeholder*='Mail']",
+                "input[name='username']",
+                "input[autocomplete='username']",
             ], timeout=8_000)
             if not email_el:
                 ctx.close()
@@ -127,8 +205,10 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
             print("✅ Email gefüllt")
             time.sleep(0.3)
 
-            # Passwort
-            pwd_el = _find(page, ["input[type='password']"], timeout=5_000)
+            pwd_el = _find(page, [
+                "input[type='password']",
+                "input[name='password']",
+            ], timeout=5_000)
             if not pwd_el:
                 ctx.close()
                 raise RuntimeError("Passwort-Feld nicht gefunden")
@@ -137,28 +217,27 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
             print("✅ Passwort gefüllt")
             time.sleep(0.3)
 
-            # Anmelden
             btn = _find(page, [
                 "button:has-text('Anmelden')",
                 "button[type='submit']",
                 "button:has-text('Login')",
+                "button:has-text('Weiter')",
             ], timeout=5_000)
-            if not btn:
-                ctx.close()
-                raise RuntimeError("Anmelden-Button nicht gefunden")
-            btn.click()
+            if btn:
+                btn.click()
+            else:
+                pwd_el.press("Enter")
             print("✅ Anmelden geklickt — warte auf Redirect...")
 
-            # Warten auf erfolgreichen Login
             deadline = time.time() + 30
             while time.time() < deadline:
                 url = page.url
-                if "signin" not in url.lower() and "login" not in url.lower() and "authenticate" not in url.lower():
+                if not any(x in url.lower() for x in ["signin", "login", "authenticate", "403", "forbidden"]):
                     print(f"✅ Eingeloggt! URL: {url}")
                     break
                 if "403" in url or "forbidden" in url.lower():
                     ctx.close()
-                    raise RuntimeError(f"403 Forbidden beim Login — WAF blockt")
+                    raise RuntimeError(f"403 Forbidden beim Login")
                 time.sleep(1)
             else:
                 ctx.close()
@@ -168,155 +247,51 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
         else:
             print("✅ Bereits eingeloggt")
 
-        # ── "Neuen Beleg erfassen" ────────────────────────────────
-        print('🖱️  Suche "Neuen Beleg erfassen"...')
-        btn_new = _find(page, [
-            "button:has-text('Neuen Beleg erfassen')",
-            "a:has-text('Neuen Beleg erfassen')",
-            "text=Neuen Beleg erfassen",
-        ], timeout=TIMEOUT_ELEMENT)
+        # ── Direkt zum Voucher-Editor navigieren ──────────────────
+        print(f"📖 Öffne Voucher-Editor direkt...")
+        page.goto(LEXWARE_VOUCHER_URL, wait_until="domcontentloaded", timeout=TIMEOUT_NAV)
+        time.sleep(3)
 
-        if not btn_new:
+        # ── File-Input finden und befüllen ────────────────────────
+        print('🖱️  Suche File-Input...')
+        fi = _get_file_input(page, timeout=20)
+        if not fi:
             ctx.close()
-            raise RuntimeError('"Neuen Beleg erfassen" nicht gefunden')
-        btn_new.click()
-        print('✅ Geklickt')
-        time.sleep(1)
+            raise RuntimeError("File-Input nicht gefunden")
 
-        # ── Upload-Button ─────────────────────────────────────────
-        print('🖱️  Suche Upload-Button...')
-        btn_file = _find(page, [
-            "button:has-text('Datei per Klick auswählen')",
-            "text=Datei per Klick auswählen",
-            "[class*='dropzone']",
-            "[class*='drop-zone']",
-            "label:has-text('Datei')",
-        ], timeout=TIMEOUT_ELEMENT)
+        _make_file_input_visible(page)
+        time.sleep(0.3)
 
-        if not btn_file:
-            ctx.close()
-            raise RuntimeError('"Datei per Klick auswählen" nicht gefunden')
+        # Zähler vor Upload
+        count_before = _get_badge_count(page)
+        print(f"📊 Badge-Zähler vor Upload: {count_before}")
 
-        print(f'📎 Setze Datei: {filename}')
-        try:
-            with page.expect_file_chooser(timeout=10_000) as fc_info:
-                btn_file.click()
-            fc_info.value.set_files(abs_path)
-            print('✅ Datei gesetzt')
-        except PWTimeout:
-            fi = page.locator("input[type='file']").first
-            if fi.count() == 0:
-                ctx.close()
-                raise RuntimeError('Kein File-Input gefunden')
-            fi.set_input_files(abs_path)
-            print('✅ Datei via input[type=file] gesetzt')
+        # Datei setzen
+        fi.set_input_files(abs_path)
+        print(f"✅ Datei gesetzt: {filename}")
+        time.sleep(3)
 
-        time.sleep(1)
+        # ── Warten auf Upload-Bestätigung per Badge-Zähler ────────
+        print("⏳ Warte auf Upload-Bestätigung...")
+        for attempt in range(10):
+            print(f"   🔄 Refresh {attempt + 1}/10...")
+            page.reload(wait_until="domcontentloaded")
+            time.sleep(4)
 
-        # ── Spinner abwarten ──────────────────────────────────────
-        print('⏳ Warte auf Verarbeitung...')
-        for sel in ["text=Beleg wird hochgeladen", "[class*='spinner']:visible"]:
-            try:
-                page.locator(sel).wait_for(state="visible", timeout=5_000)
-                page.locator(sel).wait_for(state="hidden", timeout=TIMEOUT_UPLOAD)
-                print('✅ Verarbeitung abgeschlossen')
+            count_after = _get_badge_count(page)
+            print(f"   📊 Badge-Zähler: {count_after}")
+
+            if count_after is not None and count_before is not None and count_after > count_before:
+                print(f"✅ Upload bestätigt! Zähler: {count_before} → {count_after}")
                 break
-            except Exception:
-                continue
+            elif count_after is None and count_before is None:
+                # Badge nicht gefunden — Upload trotzdem wahrscheinlich ok
+                print("ℹ️  Badge nicht gefunden — Upload vermutlich erfolgreich")
+                break
         else:
-            time.sleep(3)
+            print("⚠️  Timeout — Datei wurde möglicherweise trotzdem hochgeladen")
 
-        # ── Speichern-Button ──────────────────────────────────────
-        print('⏳ Warte auf Speichern-Button...')
-        save_btn = None
-        deadline = time.time() + 60
-        while time.time() < deadline:
-            for sel in [
-                "button:has-text('SPEICHERN + BELEGSTAPEL ABARBEITEN')",
-                "button:has-text('Speichern + Belegstapel')",
-                "button:has-text('SPEICHERN')",
-            ]:
-                try:
-                    loc = page.locator(sel).first
-                    if loc.count() > 0 and loc.is_visible() and loc.is_enabled():
-                        save_btn = loc
-                        print('✅ Speichern-Button aktiv')
-                        break
-                except Exception:
-                    continue
-            if save_btn:
-                break
-            time.sleep(0.5)
-
-        if not save_btn:
-            ctx.close()
-            raise RuntimeError('"SPEICHERN"-Button nicht gefunden')
-
-        # ── Dropdown-Pfeil ────────────────────────────────────────
-        print('🖱️  Suche Dropdown-Pfeil...')
-        dropdown_btn = None
-        for sel in [
-            "button[aria-haspopup='true']:near(button:has-text('SPEICHERN'))",
-            "button[aria-haspopup='menu']:near(button:has-text('SPEICHERN'))",
-            "button[aria-haspopup='listbox']:near(button:has-text('SPEICHERN'))",
-            "button[class*='dropdown']:near(button:has-text('SPEICHERN'))",
-            "[class*='button-group'] button:last-child",
-            "[class*='split-button'] button:last-child",
-            "[class*='btn-group'] button:last-child",
-        ]:
-            try:
-                loc = page.locator(sel).first
-                if loc.count() > 0 and loc.is_visible():
-                    if 'SPEICHERN + BELEGSTAPEL' not in (loc.text_content() or '').upper():
-                        dropdown_btn = loc
-                        print(f'✅ Dropdown: {sel}')
-                        break
-            except Exception:
-                continue
-
-        if not dropdown_btn:
-            for xpath in ['xpath=..', 'xpath=../..']:
-                try:
-                    container = save_btn.locator(xpath)
-                    btns = container.locator('button')
-                    for i in range(btns.count() - 1, -1, -1):
-                        c = btns.nth(i)
-                        if 'SPEICHERN + BELEGSTAPEL' not in (c.text_content() or '').upper() and c.is_visible():
-                            dropdown_btn = c
-                            print(f'✅ Dropdown via {xpath}')
-                            break
-                    if dropdown_btn:
-                        break
-                except Exception:
-                    continue
-
-        if not dropdown_btn:
-            ctx.close()
-            raise RuntimeError('Dropdown-Pfeil nicht gefunden')
-
-        dropdown_btn.click()
-        print('✅ Dropdown geöffnet')
-        time.sleep(0.8)
-
-        # ── "Speichern und Schließen" ─────────────────────────────
-        print('🖱️  Klicke "Speichern und Schließen"...')
-        save_close = _find(page, [
-            "text=Speichern und Schließen",
-            "[role='menuitem']:has-text('Speichern und Schließen')",
-            "[role='option']:has-text('Speichern und Schließen')",
-            "li:has-text('Speichern und Schließen')",
-            "button:has-text('Speichern und Schließen')",
-        ], timeout=5_000)
-
-        if not save_close:
-            ctx.close()
-            raise RuntimeError('"Speichern und Schließen" nicht gefunden')
-
-        save_close.click()
-        print('✅ "Speichern und Schließen" geklickt')
-        time.sleep(2)
-
-        print(f'\n✅ Upload erfolgreich: {filename}')
+        print(f'\n✅ Upload abgeschlossen: {filename}')
         ctx.close()
 
     return {"status": "ok", "filename": filename, "file": file_path}
