@@ -23,6 +23,15 @@ def _fresh_profile():
     if Path(FF_PROFILE).exists():
         shutil.rmtree(FF_PROFILE)
     Path(FF_PROFILE).mkdir(parents=True, exist_ok=True)
+    (Path(FF_PROFILE) / "user.js").write_text("""
+user_pref("dom.webdriver.enabled", false);
+user_pref("useAutomationExtension", false);
+user_pref("browser.aboutwelcome.enabled", false);
+user_pref("startup.homepage_welcome_url", "");
+user_pref("browser.shell.checkDefaultBrowser", false);
+user_pref("datareporting.policy.dataSubmissionPolicyAccepted", true);
+user_pref("datareporting.policy.dataSubmissionPolicyBypassNotification", true);
+""")
     print(f"🧹 Frisches Profil: {FF_PROFILE}")
 
 
@@ -150,8 +159,12 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
     options.add_argument("--no-sandbox")
     options.add_argument("--width=1280")
     options.add_argument("--height=900")
-    # headless=False — echter Firefox mit Display
-    # (headless würde navigator.webdriver nicht beeinflussen)
+    # Profil mit user.js (dom.webdriver.enabled=false) übergeben
+    options.add_argument(f"--profile")
+    options.add_argument(FF_PROFILE)
+    # Geckodriver-Pref via capability
+    options.set_preference("dom.webdriver.enabled", False)
+    options.set_preference("useAutomationExtension", False)
 
     service = Service(executable_path=GECKODRIVER, log_path="/tmp/geckodriver.log")
 
