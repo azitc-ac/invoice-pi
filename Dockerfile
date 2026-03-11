@@ -14,9 +14,13 @@ RUN apt-get update && apt-get install -y websockify && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 # Install Firefox from Mozilla APT repo (official ARM64 support) + xdotool + xclip
-RUN wget -q https://packages.mozilla.org/apt/repo-signing-key.gpg -O /etc/apt/keyrings/packages.mozilla.org.asc && \
+RUN apt-get update && apt-get install -y xdotool xclip wget ca-certificates && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /etc/apt/keyrings && \
+    wget -q https://packages.mozilla.org/apt/repo-signing-key.gpg -O /etc/apt/keyrings/packages.mozilla.org.asc && \
     echo "deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main" > /etc/apt/sources.list.d/mozilla.list && \
-    apt-get update && apt-get install -y firefox xdotool xclip && \
+    printf 'Package: *\nPin: origin packages.mozilla.org\nPin-Priority: 1000\n' > /etc/apt/preferences.d/mozilla && \
+    apt-get update && apt-get install -y --allow-downgrades firefox && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 # Download noVNC
 RUN mkdir -p /root && \
