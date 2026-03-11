@@ -60,7 +60,7 @@ function findAndClick(root) {
 return findAndClick(document);
 """
     print("🍪 Suche Cookie-Banner...")
-    deadline = time.time() + 10
+    deadline = time.time() + 20
     while time.time() < deadline:
         try:
             if page.evaluate(js):
@@ -92,7 +92,7 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v7")
+    print(f"\n🚀 Starte Lexware Upload v8")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
@@ -123,6 +123,11 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
         page.bring_to_front()
 
+        # Warten bis Seite geladen
+        try:
+            page.wait_for_load_state("networkidle", timeout=15_000)
+        except Exception:
+            pass
         time.sleep(2)
         print(f"📍 URL: {page.url}")
         print(f"🔍 navigator.webdriver: {page.evaluate('navigator.webdriver')}")
