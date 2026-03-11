@@ -62,13 +62,45 @@ return findAndClick(document);
     print("🍪 Suche Cookie-Banner...")
     deadline = time.time() + 20
     while time.time() < deadline:
+        # Hauptframe
         try:
             if page.evaluate(js):
-                print("✅ Cookie-Banner geschlossen")
+                print("✅ Cookie-Banner im Hauptframe geschlossen")
                 time.sleep(0.6)
                 return
         except Exception:
             pass
+
+        # Alle iframes durchsuchen
+        for frame in page.frames:
+            if frame == page.main_frame:
+                continue
+            try:
+                print(f"   🔍 Prüfe iframe: {frame.url}")
+                if frame.evaluate(js):
+                    print(f"✅ Cookie-Banner in iframe geschlossen: {frame.url}")
+                    time.sleep(0.6)
+                    return
+            except Exception:
+                pass
+
+        # Playwright-Locator über alle frames
+        for sel in [
+            "button:has-text('Alle akzeptieren')",
+            "button:has-text('Akzeptieren')",
+            "button:has-text('Accept all')",
+            "button:has-text('Zustimmen')",
+        ]:
+            try:
+                btn = page.locator(sel).first
+                if btn.is_visible(timeout=500):
+                    btn.click()
+                    print(f"✅ Cookie-Banner per Locator geschlossen: {sel}")
+                    time.sleep(0.6)
+                    return
+            except Exception:
+                pass
+
         time.sleep(0.3)
     print("ℹ️  Kein Cookie-Banner gefunden")
 
@@ -92,7 +124,7 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v10")
+    print(f"\n🚀 Starte Lexware Upload v11")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
