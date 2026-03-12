@@ -22,6 +22,17 @@ def _fresh_profile():
     if Path(FF_PROFILE).exists():
         shutil.rmtree(FF_PROFILE)
     Path(FF_PROFILE).mkdir(parents=True, exist_ok=True)
+    # Chrome Preferences: Passwort-Speichern deaktivieren
+    import json
+    prefs = {
+        "credentials_enable_service": False,
+        "profile": {
+            "password_manager_enabled": False
+        }
+    }
+    prefs_dir = Path(FF_PROFILE) / "Default"
+    prefs_dir.mkdir(parents=True, exist_ok=True)
+    (prefs_dir / "Preferences").write_text(json.dumps(prefs))
     print(f"🧹 Frisches Profil: {FF_PROFILE}")
 
 
@@ -124,7 +135,7 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v15")
+    print(f"\n🚀 Starte Lexware Upload v17")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
@@ -178,7 +189,7 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
         # Warten bis Cookie-Banner erscheint (lädt verzögert)
         print("⏳ Warte auf Cookie-Banner...")
-        time.sleep(4)
+        time.sleep(2)
 
         # Debug: alle Buttons ausgeben
         buttons = page.evaluate("""
@@ -243,12 +254,7 @@ Array.from(document.querySelectorAll('button, a, [role="button"]'))
                 raise RuntimeError(f"Login-Timeout. URL: {page.url}")
 
             time.sleep(2)
-            # "Save password?" Dialog per Escape schließen (Chrome-natives UI)
-            page.keyboard.press("Escape")
-            time.sleep(0.5)
-            page.keyboard.press("Escape")
-            time.sleep(0.5)
-            print("✅ Passwort-Dialog (Escape gesendet)")
+            time.sleep(1)
         else:
             print("✅ Bereits eingeloggt")
 
