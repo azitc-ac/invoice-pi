@@ -248,7 +248,7 @@ async def upload_lexware(file: UploadFile = File(...)):
 
 
 @app.post("/upload/lexware/path")
-def upload_lexware_by_path(req: dict):
+async def upload_lexware_by_path(req: dict):
     """
     Alternativer Endpoint: Lädt eine bereits lokal gespeicherte Datei zu Lexware hoch.
     Body: { "file_path": "/downloads/Rechnung_Freenet_2026-02.pdf" }
@@ -259,13 +259,20 @@ def upload_lexware_by_path(req: dict):
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail=f"Datei nicht gefunden: {file_path}")
 
-    try:
-        result = run_lexware_upload(file_path=file_path, headless=is_headless())
-        return result
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Upload fehlgeschlagen: {e}")
+    if lexware_lock.locked():
+        raise HTTPException(
+            status_code=409,
+            detail="Ein Upload läuft bereits. Bitte warten und erneut versuchen."
+        )
+
+    async with lexware_lock:
+        try:
+            result = await run_lexware_upload(file_path=file_path, headless=is_headless())
+            return result
+        except RuntimeError as e:
+            raise HTTPException(status_code=500, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Upload fehlgeschlagen: {e}")
 
 
 @app.get("/uploads/list")
