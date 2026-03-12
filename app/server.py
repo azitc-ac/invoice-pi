@@ -12,6 +12,14 @@ import asyncio
 import glob
 import shutil
 import tempfile
+import traceback
+
+try:
+    result = await run_lexware_upload(file_path=tmp_path, headless=is_headless())
+    return result
+except Exception as e:
+    print(f"❌ FEHLER: {traceback.format_exc()}")  # <-- volles Traceback
+    raise HTTPException(status_code=500, detail=str(e))
 
 app = FastAPI()
 

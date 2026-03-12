@@ -4,14 +4,7 @@ import shutil
 import subprocess
 from pathlib import Path
 from playwright.async_api import async_playwright, TimeoutError as PWTimeout
-import traceback
 
-try:
-    result = await run_lexware_upload(file_path=tmp_path, headless=is_headless())
-    return result
-except Exception as e:
-    print(f"❌ FEHLER: {traceback.format_exc()}")  # <-- volles Traceback
-    raise HTTPException(status_code=500, detail=str(e))
 
 LW_USER      = os.getenv("LEXWARE_USERNAME", "")
 LW_PASS      = os.getenv("LEXWARE_PASSWORD", "")
