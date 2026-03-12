@@ -124,7 +124,7 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v14")
+    print(f"\n🚀 Starte Lexware Upload v15")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
@@ -144,6 +144,8 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
         "--window-size=1280,900",
         "--disable-save-password-bubble",
         "--password-store=basic",
+        "--disable-features=PasswordManager",
+        "--disable-popup-blocking",
         f"--display={os.getenv('DISPLAY', ':0')}",
         LEXWARE_LOGIN_URL,
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -241,15 +243,12 @@ Array.from(document.querySelectorAll('button, a, [role="button"]'))
                 raise RuntimeError(f"Login-Timeout. URL: {page.url}")
 
             time.sleep(2)
-            # "Save password?" Dialog wegklicken
-            try:
-                no_thanks = page.locator("button:has-text('No thanks'), button:has-text('Never'), button:has-text('Nein')").first
-                if no_thanks.is_visible(timeout=2000):
-                    no_thanks.click()
-                    print("✅ Passwort-Dialog geschlossen")
-            except Exception:
-                pass
-            time.sleep(1)
+            # "Save password?" Dialog per Escape schließen (Chrome-natives UI)
+            page.keyboard.press("Escape")
+            time.sleep(0.5)
+            page.keyboard.press("Escape")
+            time.sleep(0.5)
+            print("✅ Passwort-Dialog (Escape gesendet)")
         else:
             print("✅ Bereits eingeloggt")
 
