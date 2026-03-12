@@ -135,7 +135,7 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v21")
+    print(f"\n🚀 Starte Lexware Upload v22")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
@@ -259,29 +259,14 @@ Array.from(document.querySelectorAll('button, a, [role="button"]'))
         else:
             print("✅ Bereits eingeloggt")
 
-        # ── Voucher-Editor per Button ─────────────────────────────
-        print(f"📍 Dashboard URL: {page.url}")
-        print(f"🖱️  Suche 'Neuen Beleg erfassen'...")
-        btn_new = _find(page, [
-            "button:has-text('Neuen Beleg erfassen')",
-            "a:has-text('Neuen Beleg erfassen')",
-            "[class*='voucher']:has-text('Neuen')",
-        ], timeout=15_000)
-
-        if btn_new:
-            btn_new.click()
-            print("✅ 'Neuen Beleg erfassen' geklickt")
-            time.sleep(3)
-        else:
-            # Fallback: direkte URL
-            print("⚠️  Button nicht gefunden — navigiere direkt...")
-            try:
-                page.goto(LEXWARE_VOUCHER_URL, wait_until="commit", timeout=15_000)
-            except Exception as e:
-                print(f"⚠️  goto Exception (ignoriert): {e}")
-            time.sleep(3)
-
-        print(f"📍 URL: {page.url}")
+        # ── Direkt zur Voucher-URL navigieren (wie PowerShell) ───
+        print(f"📖 Navigiere direkt zu Voucher-Editor...")
+        try:
+            page.goto(LEXWARE_VOUCHER_URL, wait_until="commit", timeout=15_000)
+        except Exception as e:
+            print(f"⚠️  goto Exception (ignoriert): {e}")
+        time.sleep(3)
+        print(f"📍 URL: {page.evaluate('window.location.href')}")
 
         # ── File-Input ────────────────────────────────────────────
         print("🖱️  Suche File-Input...")
