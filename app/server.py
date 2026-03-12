@@ -16,6 +16,8 @@ import traceback
 
 app = FastAPI()
 
+lexware_lock = asyncio.Lock()
+
 # ============================================================
 # ADMIN UI
 # ============================================================
@@ -227,18 +229,22 @@ async def upload_lexware(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fehler beim Speichern: {e}")
 
-    try:
-        result = await run_lexware_upload(file_path=tmp_path, headless=is_headless())
-        return result
-    except FileNotFoundError as e:
-        print(f"❌ FEHLER: {traceback.format_exc()}")
-        raise HTTPException(status_code=404, detail=str(e))
-    except RuntimeError as e:
-        print(f"❌ FEHLER: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=str(e))
-    except Exception as e:
-        print(f"❌ FEHLER: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Upload fehlgeschlagen: {e}")
+    if lexware_lock.locked():
+        raise HTTPException(
+            status_code=409,
+            detail="Ein Upload läuft bereits. Bitte warten und erneut versuchen."
+        )
+
+    async with lexware_lock:
+        try:
+            result = await run_lexware_upload(file_path=tmp_path, headless=is_headless())
+            return result
+        except FileNotFoundError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        except RuntimeError as e:
+            raise HTTPException(status_code=500, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Upload fehlgeschlagen: {e}")
 
 
 @app.post("/upload/lexware/path")
