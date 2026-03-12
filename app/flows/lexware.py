@@ -135,7 +135,7 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v17")
+    print(f"\n🚀 Starte Lexware Upload v18")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
@@ -240,15 +240,14 @@ Array.from(document.querySelectorAll('button, a, [role="button"]'))
             print("⏳ Warte auf Redirect...")
 
             deadline = time.time() + 120
-            last_url = ""
             while time.time() < deadline:
                 url = page.url
-                if url != last_url:
-                    print(f"📍 URL: {url}")
-                    last_url = url
-                if not any(x in url.lower() for x in ["signin", "login", "authenticate", "403", "forbidden"]):
+                print(f"📍 URL check: {url}")
+                if "dashboard" in url.lower() or "voucher" in url.lower() or "belege" in url.lower():
                     print(f"✅ Eingeloggt!")
                     break
+                if "403" in url or "forbidden" in url.lower():
+                    raise RuntimeError(f"403 Forbidden")
                 time.sleep(2)
             else:
                 raise RuntimeError(f"Login-Timeout. URL: {page.url}")
