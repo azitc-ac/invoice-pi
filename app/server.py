@@ -14,13 +14,6 @@ import shutil
 import tempfile
 import traceback
 
-try:
-    result = await run_lexware_upload(file_path=tmp_path, headless=is_headless())
-    return result
-except Exception as e:
-    print(f"❌ FEHLER: {traceback.format_exc()}")  # <-- volles Traceback
-    raise HTTPException(status_code=500, detail=str(e))
-
 app = FastAPI()
 
 # ============================================================
@@ -235,13 +228,16 @@ async def upload_lexware(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Fehler beim Speichern: {e}")
 
     try:
-        result = run_lexware_upload(file_path=tmp_path, headless=is_headless())
+        result = await run_lexware_upload(file_path=tmp_path, headless=is_headless())
         return result
     except FileNotFoundError as e:
+        print(f"❌ FEHLER: {traceback.format_exc()}")
         raise HTTPException(status_code=404, detail=str(e))
     except RuntimeError as e:
+        print(f"❌ FEHLER: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
+        print(f"❌ FEHLER: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Upload fehlgeschlagen: {e}")
 
 
