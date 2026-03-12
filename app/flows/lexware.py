@@ -135,7 +135,7 @@ def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v20")
+    print(f"\n🚀 Starte Lexware Upload v21")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
@@ -205,7 +205,6 @@ Array.from(document.querySelectorAll('button, a, [role="button"]'))
         # ── Login ─────────────────────────────────────────────────
         if any(x in page.url.lower() for x in ["signin", "login", "authenticate"]):
             print(f"🔐 Login als {LW_USER}...")
-
             email_el = _find(page, [
                 "input[type='email']",
                 "input[name='email']",
@@ -286,25 +285,16 @@ Array.from(document.querySelectorAll('button, a, [role="button"]'))
 
         # ── File-Input ────────────────────────────────────────────
         print("🖱️  Suche File-Input...")
-        time.sleep(3)  # Warten bis Modal/Overlay geladen
+        time.sleep(2)  # Warten bis Modal geladen
 
-        # Debug: alle sichtbaren Elemente
-        try:
-            els = page.evaluate("""
-Array.from(document.querySelectorAll('input, button, [class*="drop"], [class*="upload"]'))
-    .map(e => e.tagName + '|' + e.type + '|' + (e.className||'').substring(0,40))
-    .filter(s => s.includes('file') || s.includes('drop') || s.includes('upload'))
-""")
-            print(f"🔍 Upload-Elemente: {els[:10]}")
-        except Exception:
-            pass
-
+        # File-Input suchen — auch hidden/in Shadow DOM
         fi = None
         deadline = time.time() + 30
         while time.time() < deadline:
             try:
+                # Erst attached (auch hidden)
                 loc = page.locator("input[type='file']").first
-                loc.wait_for(state="attached", timeout=2000)
+                loc.wait_for(state="attached", timeout=1000)
                 fi = loc
                 print("✅ File-Input gefunden")
                 break
