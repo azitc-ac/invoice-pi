@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, UploadFile, File, Form, Query
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from pydantic import BaseModel
 from typing import List, Optional
@@ -209,21 +209,24 @@ UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.post("/upload/lexware")
-async def upload_lexware(file: UploadFile = File(...)):
+async def upload_lexware(
+    request: Request,
+    filename: str = Query(default="upload.pdf")
+):
     """
-    Nimmt eine hochgeladene PDF-Datei entgegen und lädt sie via Playwright zu Lexware hoch.
-    Erwartet multipart/form-data mit field 'file'.
+    Nimmt eine PDF als rohen Binary-Body entgegen und lädt sie via Playwright zu Lexware hoch.
+    Query-Parameter: filename (optional, default: upload.pdf)
+    Header: Content-Type: application/pdf
     """
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="Kein Dateiname")
+    content = await request.body()
+    if not content:
+        raise HTTPException(status_code=400, detail="Kein Inhalt")
 
-    # Datei temporär speichern
-    safe_name = os.path.basename(file.filename)
+    safe_name = os.path.basename(filename)
     tmp_path = os.path.join(UPLOAD_DIR, safe_name)
 
     try:
         with open(tmp_path, "wb") as f:
-            content = await file.read()
             f.write(content)
         print(f"📥 Datei empfangen: {tmp_path} ({len(content)} bytes)")
     except Exception as e:
