@@ -138,7 +138,9 @@ def stop_vnc_services():
     return results
 
 def check_debug_mode():
-    return get_supervisor_status("novnc") and get_supervisor_status("xvfb")
+    # Debug-Modus immer aktiv — startet Xvfb/VNC falls nötig
+    _ensure_display_services()
+    return True
 
 def _ensure_display_services():
     """Startet Xvfb, fluxbox, x11vnc und noVNC falls nicht aktiv."""
@@ -636,13 +638,22 @@ async def ws_logs(websocket: WebSocket, api_key: str = ""):
         return
 
     try:
+        from datetime import datetime
+
+        def ts(line: str) -> str:
+            """Zeitstempel prependen falls Zeile nicht leer."""
+            line = line.strip()
+            if not line:
+                return line
+            return f"{datetime.now().strftime('%Y-%m-%d_%H:%M:%S')} - {line}"
+
         proc = await asyncio.create_subprocess_exec(
             "tail", "-n", "50", log_path,
             stdout=asyncio.subprocess.PIPE
         )
         stdout, _ = await proc.communicate()
         for line in stdout.decode(errors="replace").splitlines():
-            await websocket.send_text(line)
+            await websocket.send_text(ts(line))
 
         proc = await asyncio.create_subprocess_exec(
             "tail", "-f", "-n", "0", log_path,
@@ -654,7 +665,7 @@ async def ws_logs(websocket: WebSocket, api_key: str = ""):
             if not line:
                 await asyncio.sleep(0.1)
                 continue
-            await websocket.send_text(line.decode(errors="replace").rstrip())
+            await websocket.send_text(ts(line.decode(errors="replace").rstrip()))
 
     except WebSocketDisconnect:
         proc.terminate()
