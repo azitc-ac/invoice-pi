@@ -53,6 +53,20 @@
   }
   .logo span { color: var(--muted); font-weight: 400; }
 
+  .header-debug {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 24px;
+  }
+  .header-debug-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
   .status-pill {
     margin-left: auto;
     display: flex;
@@ -440,6 +454,14 @@
 
 <header>
   <div class="logo">invoice<span>-pi</span> · admin</div>
+  <div class="header-debug">
+    <span class="header-debug-label">VNC</span>
+    <label class="toggle-switch">
+      <input type="checkbox" id="debug-toggle">
+      <span class="slider"></span>
+    </label>
+    <a id="vnc-link" href="#" target="_blank" style="display:none;font-family:var(--mono);font-size:11px;color:var(--accent2);text-decoration:none;">↗</a>
+  </div>
   <div class="status-pill">
     <div class="dot" id="health-dot"></div>
     <span id="health-text">checking...</span>
@@ -460,26 +482,7 @@
     <!-- ═══════════════════════════════════════════════════ -->
     <div class="tab-panel active" id="tab-download">
 
-      <!-- DEBUG MODE -->
-      <div>
-        <div class="section-label">Debug Mode</div>
-        <div class="toggle-row">
-          <div>
-            <div class="toggle-label">VNC / sichtbarer Browser</div>
-            <div class="toggle-sub" id="debug-sub">inaktiv</div>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="debug-toggle">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div style="margin-top:10px;display:none" id="vnc-link-row">
-          <a id="vnc-link" href="#" target="_blank"
-             style="font-family:var(--mono);font-size:11px;color:var(--accent2);text-decoration:none;">
-            → noVNC öffnen ↗
-          </a>
-        </div>
-      </div>
+
 
       <!-- SESSION SPEICHERN -->
       <div>
@@ -766,15 +769,12 @@
     debugActive = enabled;
     if (url) vncUrl = url;
     const toggle  = document.getElementById('debug-toggle');
-    const sub     = document.getElementById('debug-sub');
-    const vncRow  = document.getElementById('vnc-link-row');
     const vncLink = document.getElementById('vnc-link');
     const lvHint  = document.getElementById('lexware-vnc-hint');
     const lvLink  = document.getElementById('lexware-vnc-link');
 
     toggle.checked = enabled;
-    sub.textContent = enabled ? 'aktiv — Browser sichtbar' : 'inaktiv';
-    vncRow.style.display = enabled ? 'block' : 'none';
+    vncLink.style.display = enabled ? 'inline' : 'none';
     if (url) {
       vncLink.href = url; vncLink.textContent = `→ ${url} ↗`;
       lvLink.href  = url;
