@@ -6,6 +6,21 @@ from pathlib import Path
 
 # ── Datum-Normalisierung ──────────────────────────────────────────────────────
 
+def _fix_microsoft_date(date_str: str) -> str:
+    """Korrigiert Microsoft YYYY-DD-MM Datumsformat (z.B. 2026-06-02 = 2. Juni -> 2026-02-06)."""
+    m = re.match(r"(\d{4})-(\d{2})-(\d{2})", date_str)
+    if m:
+        y, a, b = m.group(1), int(m.group(2)), int(m.group(3))
+        # Wenn "Monat" > 12 ist es eigentlich der Tag
+        if a > 12 and b <= 12:
+            return f"{y}-{b:02d}-{a:02d}"
+        # Wenn Tag <= 6 und "Monat" <= 12: könnte DD/MM sein
+        # Heuristik: Microsoft-Rechnungen kommen am 5./6. -> kleiner Wert ist Tag
+        if b <= 6 < a:
+            return f"{y}-{b:02d}-{a:02d}"
+    return date_str
+
+
 def _normalize_date(raw: str) -> str | None:
     """Versucht verschiedene Datumsformate zu normalisieren → YYYY-MM-DD."""
     raw = raw.strip()
@@ -46,6 +61,7 @@ def _normalize_date(raw: str) -> str | None:
 
 # Primäre Datumsmuster (Rechnungsdatum bevorzugt)
 DATE_PATTERNS = [
+    r"Belegdatum[:\s]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
     r"Rechnungsdatum[:\s]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
     r"Datum[:\s]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
     r"Invoice Date[:\s]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
@@ -73,6 +89,8 @@ INVOICE_NR_PATTERNS = [
     # Amazon-spezifisch
     r"Bestellnummer[:\s]+(\d{3}-\d{7}-\d{7})",
     r"Order\s*(?:ID|No)[:\s]+(\d{3}-\d{7}-\d{7})",
+    # Microsoft
+    r"Abrechnungsnummer\s+([A-Z0-9\-]{4,20})",
     # Freenet/NetAachen
     r"Rechnungs-ID[:\s]+([A-Z0-9\-]{4,20})",
     # Pieksauber
@@ -80,6 +98,8 @@ INVOICE_NR_PATTERNS = [
 ]
 
 AMOUNT_PATTERNS = [
+    # Microsoft Gesamtsumme
+    (r"Gesamtsumme\s+EUR\s+([\d.,]+)", 1),
     # Amazon
     (r"Zahlbetrag\s+([\d.,]+\s*€)", 1),
     # Freenet
@@ -164,7 +184,7 @@ def _find_date(text: str) -> str | None:
         if m:
             normalized = _normalize_date(m.group(1))
             if normalized:
-                return normalized
+                return _fix_microsoft_date(normalized)
     # Fallback: Liefer- oder Leistungsdatum
     for pattern in DATE_FALLBACK_PATTERNS:
         m = re.search(pattern, normalized_text, re.IGNORECASE)
@@ -197,14 +217,28 @@ def _find_invoice_number(text: str) -> str | None:
     return None
 
 
+def _normalize_amount(val: str) -> str:
+    """Normalisiert Betrag: Punkt als Tausender/Dezimal -> Komma, EUR -> €."""
+    val = val.strip()
+    val = re.sub(r"EUR\s*", "", val).strip()
+    # Amerikanisches Format: 1,234.56 -> 1234,56
+    if re.match(r"^[\d,]+\.\d{2}$", val):
+        val = val.replace(",", "").replace(".", ",")
+    # Nur Punkt als Dezimal: 29.42 -> 29,42
+    elif re.match(r"^\d+\.\d{1,2}$", val):
+        val = val.replace(".", ",")
+    val = val.strip()
+    if not val.endswith("€"):
+        val += " €"
+    return val
+
+
 def _find_amount(text: str) -> str | None:
     for pattern, group in AMOUNT_PATTERNS:
         m = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
         if m:
             val = m.group(group).strip()
-            # EUR normalisieren zu €
-            val = val.replace("EUR", "€").strip()
-            return val
+            return _normalize_amount(val)
     return None
 
 
