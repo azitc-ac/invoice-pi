@@ -120,8 +120,15 @@ return findAndClick(document);
 async def _get_badge_count(page):
     try:
         return await page.evaluate("""
-var el = document.querySelector("span.grld-bs-badge-info, .grld-bs-badge-info");
-if (el) return parseInt(el.textContent.trim(), 10);
+// Suche alle Badge-Elemente und nimm den info-farbigen (grün)
+var candidates = document.querySelectorAll(".grld-bs-badge-info, span.grld-bs-badge-info");
+for (var i = 0; i < candidates.length; i++) {
+    var val = parseInt(candidates[i].textContent.trim(), 10);
+    if (!isNaN(val)) return val;
+}
+// Fallback: "Zu prüfen" Badge in der Sidebar
+var sidebar = document.querySelector("[class*='badge'][class*='info']");
+if (sidebar) return parseInt(sidebar.textContent.trim(), 10);
 return null;
 """)
     except Exception:
@@ -136,7 +143,7 @@ async def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v23")
+    print(f"\n🚀 Starte Lexware Upload v26")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
@@ -301,21 +308,24 @@ if (el) {
         print(f"✅ Datei gesetzt: {filename}")
         await asyncio.sleep(3)
 
-        # ── Bestätigung per Badge ─────────────────────────────────
-        print("⏳ Warte auf Upload-Bestätigung...")
-        for attempt in range(10):
-            print(f"   🔄 Refresh {attempt + 1}/10...")
-            await page.reload(wait_until="domcontentloaded")
-            await asyncio.sleep(4)
-            count_after = await _get_badge_count(page)
-            print(f"   📊 Badge: {count_after}")
-            if count_after is not None and count_before is not None and count_after > count_before:
-                print(f"✅ Upload bestätigt! {count_before} → {count_after}")
-                break
-            elif count_after is None:
-                print("⚠️  Badge nicht gefunden nach Refresh")
+        # ── Bestätigung: Voucher-URL neu laden und Badge prüfen ──
+        print("⏳ Warte 3s dann Voucher-URL neu laden...")
+        await asyncio.sleep(3)
+        try:
+            await page.goto(LEXWARE_VOUCHER_URL, wait_until="commit", timeout=15_000)
+        except Exception:
+            pass
+        try:
+            await page.wait_for_selector(".grld-bs-badge-info", timeout=10_000)
+        except Exception:
+            pass
+        await asyncio.sleep(1)
+        count_after = await _get_badge_count(page)
+        print(f"📊 Badge nach Upload: {count_after}")
+        if count_after is not None and (count_before is None or count_after > count_before):
+            print(f"✅ Upload bestätigt! Badge: {count_after}")
         else:
-            print("⚠️  Timeout — möglicherweise trotzdem hochgeladen")
+            print("⚠️  Badge unverändert — Upload möglicherweise trotzdem erfolgreich")
 
         print(f"\n✅ Upload abgeschlossen: {filename}")
         await browser.close()
