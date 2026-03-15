@@ -108,25 +108,30 @@ SUPPLIER_PATTERNS = [
 ]
 
 
-def _deduplicate_chars(text: str) -> str:
-    """Bereinigt OCR-Artefakt bei dem jeder Buchstabe doppelt vorkommt (AAbBcC -> AbC)."""
-    # Prüfen ob Text überhaupt doppelte Zeichen hat (mind. 30% der Zeichen doppelt)
-    if len(text) < 10:
-        return text
-    doubled = sum(1 for i in range(0, len(text) - 1, 2) if text[i] == text[i+1])
-    ratio = doubled / (len(text) / 2)
-    if ratio < 0.4:
-        return text  # kein Deduplizierungs-Artefakt
+def _deduplicate_line(line: str) -> str:
+    """Dedupliziert eine einzelne Zeile falls sie das Doppel-Zeichen-Artefakt hat."""
+    if len(line) < 4:
+        return line
+    # Zähle wie viele aufeinanderfolgende Zeichenpaare gleich sind
+    pairs = sum(1 for i in range(0, len(line) - 1, 2) if line[i] == line[i+1])
+    ratio = pairs / max(len(line) / 2, 1)
+    if ratio < 0.5:
+        return line  # keine Dopplungen
     # Jeden zweiten Buchstaben entfernen
     result = []
     i = 0
-    while i < len(text):
-        result.append(text[i])
-        if i + 1 < len(text) and text[i] == text[i+1]:
-            i += 2  # doppelten Buchstaben überspringen
+    while i < len(line):
+        result.append(line[i])
+        if i + 1 < len(line) and line[i] == line[i+1]:
+            i += 2
         else:
             i += 1
     return "".join(result)
+
+
+def _deduplicate_chars(text: str) -> str:
+    """Bereinigt OCR-Artefakt zeilenweise."""
+    return "\n".join(_deduplicate_line(line) for line in text.splitlines())
 
 
 def _extract_text(pdf_path: str) -> str:
