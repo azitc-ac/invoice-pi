@@ -616,6 +616,28 @@ def debug_disable():
 # ============================================================
 # WEBSOCKET - Live Log Stream
 # ============================================================
+# Analyse-Endpoint
+# ============================================================
+
+@app.post("/analyze/invoice")
+async def analyze_invoice_endpoint(file: UploadFile = File(...)):
+    """PDF hochladen und Rechnungsdaten extrahieren (Datum, Lieferant, Rechnungsnummer)."""
+    import tempfile
+    content = await file.read()
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
+    try:
+        result = analyze_invoice(tmp_path)
+        return result
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+
+
+# ============================================================
 
 def find_log_file() -> str | None:
     matches = glob.glob("/var/log/supervisor/fastapi-stdout---supervisor-*.log")
