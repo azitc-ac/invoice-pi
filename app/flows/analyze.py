@@ -71,6 +71,8 @@ INVOICE_NR_PATTERNS = [
     r"Order\s*(?:ID|No)[:\s]+(\d{3}-\d{7}-\d{7})",
     # Freenet/NetAachen
     r"Rechnungs-ID[:\s]+([A-Z0-9\-]{4,20})",
+    # Pieksauber
+    r"(RECH\d{8})",
 ]
 
 AMOUNT_PATTERNS = [
@@ -91,6 +93,7 @@ AMOUNT_PATTERNS = [
 
 # Bekannte Lieferanten — Reihenfolge wichtig (spezifischer zuerst)
 SUPPLIER_PATTERNS = [
+    (r"Pieksauber|PPiieekkssaauubbeerr|pieksauber", "Pieksauber"),
     (r"Amazon Business", "Amazon Business EU SARL"),
     (r"Amazon\.de|amazon\.de", "Amazon"),
     (r"Microsoft Ireland|Microsoft Deutschland", "Microsoft"),
