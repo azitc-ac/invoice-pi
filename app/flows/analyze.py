@@ -39,6 +39,7 @@ def _normalize_date(raw: str) -> str | None:
 
 # ── Regex-Pattern ─────────────────────────────────────────────────────────────
 
+# Primäre Datumsmuster (Rechnungsdatum bevorzugt)
 DATE_PATTERNS = [
     r"Rechnungsdatum[:\s]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
     r"Datum[:\s]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
@@ -46,6 +47,14 @@ DATE_PATTERNS = [
     r"Date[:\s]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
     r"(\d{1,2}\.\s*(?:Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\s*\d{4})",
     r"(\d{1,2}\.\d{2}\.\d{4})",
+]
+
+# Fallback-Datumsmuster wenn Rechnungsdatum nicht gefunden (z.B. Amazon Lieferdatum)
+DATE_FALLBACK_PATTERNS = [
+    r"Lieferdatum[:\s/]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
+    r"/Lieferdatum[:\s]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
+    r"Delivery Date[:\s]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
+    r"Leistungsdatum[:\s/]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
 ]
 
 INVOICE_NR_PATTERNS = [
@@ -93,6 +102,13 @@ def _extract_text(pdf_path: str) -> str:
 
 def _find_date(text: str) -> str | None:
     for pattern in DATE_PATTERNS:
+        m = re.search(pattern, text, re.IGNORECASE)
+        if m:
+            normalized = _normalize_date(m.group(1))
+            if normalized:
+                return normalized
+    # Fallback: Liefer- oder Leistungsdatum
+    for pattern in DATE_FALLBACK_PATTERNS:
         m = re.search(pattern, text, re.IGNORECASE)
         if m:
             normalized = _normalize_date(m.group(1))
