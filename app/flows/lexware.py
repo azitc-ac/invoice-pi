@@ -149,7 +149,7 @@ async def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v27")
+    print(f"\n🚀 Starte Lexware Upload v28")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
@@ -321,12 +321,21 @@ if (el) {
             await page.goto(LEXWARE_VOUCHER_URL, wait_until="commit", timeout=15_000)
         except Exception:
             pass
-        try:
-            await page.wait_for_selector(".grld-bs-badge-info", timeout=10_000)
-        except Exception:
-            pass
-        await asyncio.sleep(1)
-        count_after = await _get_badge_count(page)
+        await asyncio.sleep(5)
+
+        # Badge direkt per JS lesen
+        badge_js = "return document.querySelector('span.grld-bs-badge-sidebar.grld-bs-badge-info')?.textContent?.trim()"
+        count_after = None
+        for frame in [page.main_frame] + page.frames:
+            try:
+                val = await frame.evaluate(badge_js)
+                print(f"   🔍 Frame {frame.url[:50]}: badge={val}")
+                if val is not None:
+                    count_after = int(val)
+                    break
+            except Exception as e:
+                print(f"   ⚠️  Frame error: {e}")
+
         print(f"📊 Badge nach Upload: {count_after}")
         if count_after is not None and (count_before is None or count_after > count_before):
             print(f"✅ Upload bestätigt! Badge: {count_after}")
