@@ -120,7 +120,7 @@ return findAndClick(document);
 async def _get_badge_count(page):
     try:
         return await page.evaluate("""
-var el = document.querySelector("span.grld-bs-badge-info");
+var el = document.querySelector("span.grld-bs-badge-info, .grld-bs-badge-info");
 if (el) return parseInt(el.textContent.trim(), 10);
 return null;
 """)
@@ -136,7 +136,7 @@ async def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v22")
+    print(f"\n🚀 Starte Lexware Upload v23")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
@@ -312,9 +312,8 @@ if (el) {
             if count_after is not None and count_before is not None and count_after > count_before:
                 print(f"✅ Upload bestätigt! {count_before} → {count_after}")
                 break
-            elif count_after is None and count_before is None:
-                print("ℹ️  Badge nicht gefunden — vermutlich ok")
-                break
+            elif count_after is None:
+                print("⚠️  Badge nicht gefunden nach Refresh")
         else:
             print("⚠️  Timeout — möglicherweise trotzdem hochgeladen")
 
