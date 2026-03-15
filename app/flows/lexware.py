@@ -118,24 +118,12 @@ return findAndClick(document);
 
 
 async def _get_badge_count(page):
-    js = """
-var el = document.querySelector("span.grld-bs-badge-sidebar.grld-bs-badge-info, span.grld-bs-badge-info");
-if (el) return parseInt(el.textContent.trim(), 10);
-return null;
-"""
-    # Hauptframe
-    try:
-        result = await page.evaluate(js)
-        if result is not None:
-            return result
-    except Exception:
-        pass
-    # Alle iframes durchsuchen
-    for frame in page.frames:
+    js = "document.querySelector('span.grld-bs-badge-sidebar.grld-bs-badge-info')?.textContent?.trim()"
+    for frame in [page.main_frame] + page.frames:
         try:
-            result = await frame.evaluate(js)
-            if result is not None:
-                return result
+            val = await frame.evaluate(js)
+            if val is not None:
+                return int(val)
         except Exception:
             pass
     return None
@@ -149,7 +137,7 @@ async def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v29")
+    print(f"\n🚀 Starte Lexware Upload v31")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
@@ -280,6 +268,10 @@ Array.from(document.querySelectorAll('button, a, [role="button"]'))
         print("🖱️  Suche File-Input...")
         await asyncio.sleep(2)
 
+        # Badge VOR Upload lesen (wir sind bereits auf der Voucher-Seite)
+        count_before = await _get_badge_count(page)
+        print(f"📊 Badge-Zähler vor Upload: {count_before}")
+
         fi = None
         deadline = asyncio.get_event_loop().time() + 30
         while asyncio.get_event_loop().time() < deadline:
@@ -307,9 +299,6 @@ if (el) {
 """)
         await asyncio.sleep(0.3)
 
-        count_before = await _get_badge_count(page)
-        print(f"📊 Badge-Zähler vor Upload: {count_before}")
-
         await fi.set_input_files(abs_path)
         print(f"✅ Datei gesetzt: {filename}")
         await asyncio.sleep(3)
@@ -323,18 +312,7 @@ if (el) {
             pass
         await asyncio.sleep(5)
 
-        # Badge direkt per JS lesen
-        badge_js = "document.querySelector('span.grld-bs-badge-sidebar.grld-bs-badge-info')?.textContent?.trim()"
-        count_after = None
-        for frame in [page.main_frame] + page.frames:
-            try:
-                val = await frame.evaluate(badge_js)
-                print(f"   🔍 Frame {frame.url[:50]}: badge={val}")
-                if val is not None:
-                    count_after = int(val)
-                    break
-            except Exception as e:
-                print(f"   ⚠️  Frame error: {e}")
+        count_after = await _get_badge_count(page)
 
         print(f"📊 Badge nach Upload: {count_after}")
         if count_after is not None and (count_before is None or count_after > count_before):
