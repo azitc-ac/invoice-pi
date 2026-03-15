@@ -108,6 +108,27 @@ SUPPLIER_PATTERNS = [
 ]
 
 
+def _deduplicate_chars(text: str) -> str:
+    """Bereinigt OCR-Artefakt bei dem jeder Buchstabe doppelt vorkommt (AAbBcC -> AbC)."""
+    # Prüfen ob Text überhaupt doppelte Zeichen hat (mind. 30% der Zeichen doppelt)
+    if len(text) < 10:
+        return text
+    doubled = sum(1 for i in range(0, len(text) - 1, 2) if text[i] == text[i+1])
+    ratio = doubled / (len(text) / 2)
+    if ratio < 0.4:
+        return text  # kein Deduplizierungs-Artefakt
+    # Jeden zweiten Buchstaben entfernen
+    result = []
+    i = 0
+    while i < len(text):
+        result.append(text[i])
+        if i + 1 < len(text) and text[i] == text[i+1]:
+            i += 2  # doppelten Buchstaben überspringen
+        else:
+            i += 1
+    return "".join(result)
+
+
 def _extract_text(pdf_path: str) -> str:
     """Extrahiert Text aus allen Seiten eines PDFs."""
     text_parts = []
@@ -116,7 +137,8 @@ def _extract_text(pdf_path: str) -> str:
             t = page.extract_text()
             if t:
                 text_parts.append(t)
-    return "\n".join(text_parts)
+    text = "\n".join(text_parts)
+    return _deduplicate_chars(text)
 
 
 def _find_date(text: str) -> str | None:
