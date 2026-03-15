@@ -138,9 +138,7 @@ def stop_vnc_services():
     return results
 
 def check_debug_mode():
-    # Debug-Modus immer aktiv — startet Xvfb/VNC falls nötig
-    _ensure_display_services()
-    return True
+    return get_supervisor_status("novnc") and get_supervisor_status("xvfb")
 
 def _ensure_display_services():
     """Startet Xvfb, fluxbox, x11vnc und noVNC falls nicht aktiv."""
