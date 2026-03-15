@@ -149,7 +149,7 @@ async def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v28")
+    print(f"\n🚀 Starte Lexware Upload v29")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
@@ -324,7 +324,7 @@ if (el) {
         await asyncio.sleep(5)
 
         # Badge direkt per JS lesen
-        badge_js = "return document.querySelector('span.grld-bs-badge-sidebar.grld-bs-badge-info')?.textContent?.trim()"
+        badge_js = "document.querySelector('span.grld-bs-badge-sidebar.grld-bs-badge-info')?.textContent?.trim()"
         count_after = None
         for frame in [page.main_frame] + page.frames:
             try:
