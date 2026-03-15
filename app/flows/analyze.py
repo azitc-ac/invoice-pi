@@ -74,15 +74,19 @@ INVOICE_NR_PATTERNS = [
 ]
 
 AMOUNT_PATTERNS = [
-    r"Zahlbetrag\s+([\d.,]+\s*€)",
-    r"Rechnungsbetrag\s+([\d.,]+\s*€)",
-    r"Gesamtbetrag\s+([\d.,]+\s*€)",
-    r"Total\s+([\d.,]+\s*€)",
-    r"Betrag\s+([\d.,]+\s*€)",
-    r"Gebühren[:\s]+([\d.,]+\s*€)",
-    r"Produkt:.*?Gebühren[:\s]+([\d.,]+\s*€)",
-    r"(?:EUR|€)\s*([\d.,]+)(?:\s*€)?",
-    r"([\d.,]+\s*€)\s*(?:inkl\.|zzgl\.|Gesamt|Total|Summe)",
+    # Amazon
+    (r"Zahlbetrag\s+([\d.,]+\s*€)", 1),
+    # Freenet
+    (r"Rechnungsbetrag\s+gesamt\s+([\d.,]+\s*€)", 1),
+    # Microsoft: Betrag steht allein nach Fälligkeitsdatum
+    (r"Fälligkeitsdatum:[^\n]+\n([\d.,]+\s*EUR)", 1),
+    # Microsoft Gebühren
+    (r"Gebühren:\s*([\d.,]+)", 1),
+    # Allgemein
+    (r"Gesamtbetrag\s+([\d.,]+\s*(?:EUR|€))", 1),
+    (r"Brutto[:\s]+([\d.,]+\s*(?:EUR|€))", 1),
+    (r"Summe[:\s]+([\d.,]+\s*(?:EUR|€))", 1),
+    (r"Total[:\s]+([\d.,]+\s*(?:EUR|€))", 1),
 ]
 
 # Bekannte Lieferanten — Reihenfolge wichtig (spezifischer zuerst)
@@ -146,10 +150,13 @@ def _find_invoice_number(text: str) -> str | None:
 
 
 def _find_amount(text: str) -> str | None:
-    for pattern in AMOUNT_PATTERNS:
-        m = re.search(pattern, text, re.IGNORECASE)
+    for pattern, group in AMOUNT_PATTERNS:
+        m = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
         if m:
-            return m.group(1).strip()
+            val = m.group(group).strip()
+            # EUR normalisieren zu €
+            val = val.replace("EUR", "€").strip()
+            return val
     return None
 
 
