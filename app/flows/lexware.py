@@ -1,10 +1,9 @@
 import os
-import asyncio
+import time
 import shutil
 import subprocess
 from pathlib import Path
-from playwright.async_api import async_playwright, TimeoutError as PWTimeout
-
+from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
 LW_USER      = os.getenv("LEXWARE_USERNAME", "")
 LW_PASS      = os.getenv("LEXWARE_PASSWORD", "")
@@ -20,10 +19,10 @@ TIMEOUT_ELEMENT = 15_000
 
 
 def _fresh_profile():
-    # Kein async nötig — nur Dateisystem-Operationen
     if Path(FF_PROFILE).exists():
         shutil.rmtree(FF_PROFILE)
     Path(FF_PROFILE).mkdir(parents=True, exist_ok=True)
+    # Chrome Preferences: Passwort-Speichern deaktivieren
     import json
     prefs = {
         "credentials_enable_service": False,
@@ -37,19 +36,19 @@ def _fresh_profile():
     print(f"🧹 Frisches Profil: {FF_PROFILE}")
 
 
-async def _find(page, selectors, timeout=10_000):
+def _find(page, selectors, timeout=10_000):
     for sel in selectors:
         try:
             loc = page.locator(sel).first
-            await loc.wait_for(state="visible", timeout=timeout)
-            if await loc.is_visible():
+            loc.wait_for(state="visible", timeout=timeout)
+            if loc.is_visible():
                 return loc
         except Exception:
             continue
     return None
 
 
-async def _dismiss_cookie_banner(page):
+def _dismiss_cookie_banner(page):
     js = """
 function findAndClick(root) {
     var keywords = ['alle akzept', 'akzept', 'zustimm', 'einverstanden', 'accept all', 'accept'];
@@ -72,13 +71,13 @@ function findAndClick(root) {
 return findAndClick(document);
 """
     print("🍪 Suche Cookie-Banner...")
-    deadline = asyncio.get_event_loop().time() + 20
-    while asyncio.get_event_loop().time() < deadline:
+    deadline = time.time() + 20
+    while time.time() < deadline:
         # Hauptframe
         try:
-            if await page.evaluate(js):
+            if page.evaluate(js):
                 print("✅ Cookie-Banner im Hauptframe geschlossen")
-                await asyncio.sleep(0.6)
+                time.sleep(0.6)
                 return
         except Exception:
             pass
@@ -89,9 +88,9 @@ return findAndClick(document);
                 continue
             try:
                 print(f"   🔍 Prüfe iframe: {frame.url}")
-                if await frame.evaluate(js):
+                if frame.evaluate(js):
                     print(f"✅ Cookie-Banner in iframe geschlossen: {frame.url}")
-                    await asyncio.sleep(0.6)
+                    time.sleep(0.6)
                     return
             except Exception:
                 pass
@@ -105,22 +104,22 @@ return findAndClick(document);
         ]:
             try:
                 btn = page.locator(sel).first
-                if await btn.is_visible(timeout=500):
-                    await btn.click()
+                if btn.is_visible(timeout=500):
+                    btn.click()
                     print(f"✅ Cookie-Banner per Locator geschlossen: {sel}")
-                    await asyncio.sleep(0.6)
+                    time.sleep(0.6)
                     return
             except Exception:
                 pass
 
-        await asyncio.sleep(0.3)
+        time.sleep(0.3)
     print("ℹ️  Kein Cookie-Banner gefunden")
 
 
-async def _get_badge_count(page):
+def _get_badge_count(page):
     try:
-        return await page.evaluate("""
-var el = document.querySelector("span.grld-bs-badge-info");
+        return page.evaluate("""
+var el = document.querySelector("span.grld-bs-badge-info, .grld-bs-badge-info");
 if (el) return parseInt(el.textContent.trim(), 10);
 return null;
 """)
@@ -128,7 +127,7 @@ return null;
         return None
 
 
-async def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
+def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
     if not os.path.isfile(file_path):
         raise FileNotFoundError(f"Datei nicht gefunden: {file_path}")
     if not LW_USER or not LW_PASS:
@@ -136,13 +135,14 @@ async def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v22")
+    print(f"\n🚀 Starte Lexware Upload v23")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
 
+    # Chromium manuell starten mit Anti-Detection Flags + CDP
     subprocess.run("pkill -f 'chrome-linux/chrome' 2>/dev/null", shell=True)
-    await asyncio.sleep(1)
+    time.sleep(1)
 
     print(f"🌐 Starte Chromium mit CDP auf Port {CDP_PORT}...")
     proc = subprocess.Popen([
@@ -161,34 +161,38 @@ async def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
         LEXWARE_LOGIN_URL,
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    await asyncio.sleep(4)
+    time.sleep(4)
 
-    async with async_playwright() as p:
+    with sync_playwright() as p:
         print(f"🔌 Verbinde via CDP...")
-        browser = await p.chromium.connect_over_cdp(f"http://localhost:{CDP_PORT}")
+        browser = p.chromium.connect_over_cdp(f"http://localhost:{CDP_PORT}")
         ctx = browser.contexts[0]
-        page = ctx.pages[0] if ctx.pages else await ctx.new_page()
-        await page.bring_to_front()
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        page.bring_to_front()
 
+        # Warten bis Seite geladen
         try:
-            await page.wait_for_load_state("networkidle", timeout=15_000)
+            page.wait_for_load_state("networkidle", timeout=15_000)
         except Exception:
             pass
-        await asyncio.sleep(2)
+        time.sleep(2)
         print(f"📍 URL: {page.url}")
-        print(f"🔍 navigator.webdriver: {await page.evaluate('navigator.webdriver')}")
+        print(f"🔍 navigator.webdriver: {page.evaluate('navigator.webdriver')}")
 
+        # Erst warten bis Login-Formular sichtbar ist
         print("⏳ Warte auf Login-Formular...")
         try:
-            await page.wait_for_selector("input[type='email'], input[type='password'], input[name='username']", timeout=15_000)
+            page.wait_for_selector("input[type='email'], input[type='password'], input[name='username']", timeout=15_000)
         except Exception:
             pass
-        await asyncio.sleep(1)
+        time.sleep(1)
 
+        # Warten bis Cookie-Banner erscheint (lädt verzögert)
         print("⏳ Warte auf Cookie-Banner...")
-        await asyncio.sleep(2)
+        time.sleep(2)
 
-        buttons = await page.evaluate("""
+        # Debug: alle Buttons ausgeben
+        buttons = page.evaluate("""
 Array.from(document.querySelectorAll('button, a, [role="button"]'))
     .map(e => e.innerText || e.textContent || '')
     .filter(t => t.trim())
@@ -196,12 +200,12 @@ Array.from(document.querySelectorAll('button, a, [role="button"]'))
 """)
         print(f"🔍 Sichtbare Buttons: {buttons[:15]}")
 
-        await _dismiss_cookie_banner(page)
+        _dismiss_cookie_banner(page)
 
         # ── Login ─────────────────────────────────────────────────
         if any(x in page.url.lower() for x in ["signin", "login", "authenticate"]):
             print(f"🔐 Login als {LW_USER}...")
-            email_el = await _find(page, [
+            email_el = _find(page, [
                 "input[type='email']",
                 "input[name='email']",
                 "input[name='username']",
@@ -209,35 +213,35 @@ Array.from(document.querySelectorAll('button, a, [role="button"]'))
             ], timeout=8_000)
             if not email_el:
                 raise RuntimeError("Email-Feld nicht gefunden")
-            await email_el.click()
-            await email_el.fill(LW_USER)
+            email_el.click()
+            email_el.fill(LW_USER)
             print("✅ Email gefüllt")
-            await asyncio.sleep(0.3)
+            time.sleep(0.3)
 
-            pwd_el = await _find(page, ["input[type='password']"], timeout=5_000)
+            pwd_el = _find(page, ["input[type='password']"], timeout=5_000)
             if not pwd_el:
                 raise RuntimeError("Passwort-Feld nicht gefunden")
-            await pwd_el.click()
-            await pwd_el.fill(LW_PASS)
+            pwd_el.click()
+            pwd_el.fill(LW_PASS)
             print("✅ Passwort gefüllt")
-            await asyncio.sleep(0.3)
+            time.sleep(0.3)
 
-            btn = await _find(page, [
+            btn = _find(page, [
                 "button:has-text('Anmelden')",
                 "button[type='submit']",
                 "button:has-text('Login')",
             ], timeout=5_000)
             if btn:
-                print(f"🖱️  Klicke: '{await btn.text_content()}'")
-                await btn.click()
+                print(f"🖱️  Klicke: '{btn.text_content()}'")
+                btn.click()
             else:
-                await pwd_el.press("Enter")
+                pwd_el.press("Enter")
             print("⏳ Warte auf Redirect...")
 
-            deadline = asyncio.get_event_loop().time() + 120
-            while asyncio.get_event_loop().time() < deadline:
+            deadline = time.time() + 120
+            while time.time() < deadline:
                 try:
-                    url = await page.evaluate("window.location.href")
+                    url = page.evaluate("window.location.href")
                 except Exception:
                     url = page.url
                 print(f"📍 URL check: {url}")
@@ -246,44 +250,48 @@ Array.from(document.querySelectorAll('button, a, [role="button"]'))
                     break
                 if "403" in url or "forbidden" in url.lower():
                     raise RuntimeError(f"403 Forbidden")
-                await asyncio.sleep(2)
+                time.sleep(2)
             else:
                 raise RuntimeError(f"Login-Timeout. URL: {page.url}")
 
-            await asyncio.sleep(3)
+            time.sleep(2)
+            time.sleep(1)
         else:
             print("✅ Bereits eingeloggt")
 
-        # ── Direkt zur Voucher-URL navigieren ───
+        # ── Direkt zur Voucher-URL navigieren (wie PowerShell) ───
         print(f"📖 Navigiere direkt zu Voucher-Editor...")
         try:
-            await page.goto(LEXWARE_VOUCHER_URL, wait_until="commit", timeout=15_000)
+            page.goto(LEXWARE_VOUCHER_URL, wait_until="commit", timeout=15_000)
         except Exception as e:
             print(f"⚠️  goto Exception (ignoriert): {e}")
-        await asyncio.sleep(3)
-        print(f"📍 URL: {await page.evaluate('window.location.href')}")
+        time.sleep(3)
+        print(f"📍 URL: {page.evaluate('window.location.href')}")
 
         # ── File-Input ────────────────────────────────────────────
         print("🖱️  Suche File-Input...")
-        await asyncio.sleep(2)
+        time.sleep(2)  # Warten bis Modal geladen
 
+        # File-Input suchen — auch hidden/in Shadow DOM
         fi = None
-        deadline = asyncio.get_event_loop().time() + 30
-        while asyncio.get_event_loop().time() < deadline:
+        deadline = time.time() + 30
+        while time.time() < deadline:
             try:
+                # Erst attached (auch hidden)
                 loc = page.locator("input[type='file']").first
-                await loc.wait_for(state="attached", timeout=1000)
+                loc.wait_for(state="attached", timeout=1000)
                 fi = loc
                 print("✅ File-Input gefunden")
                 break
             except Exception:
                 pass
-            await asyncio.sleep(0.5)
+            time.sleep(0.5)
 
         if not fi:
             raise RuntimeError("File-Input nicht gefunden")
 
-        await page.evaluate("""
+        # Sichtbar machen
+        page.evaluate("""
 var el = document.querySelector("input[type='file']");
 if (el) {
     el.style.cssText = 'display:block!important;visibility:visible!important;opacity:1!important;width:100px!important;height:30px!important;';
@@ -292,34 +300,33 @@ if (el) {
     el.removeAttribute('disabled');
 }
 """)
-        await asyncio.sleep(0.3)
+        time.sleep(0.3)
 
-        count_before = await _get_badge_count(page)
+        count_before = _get_badge_count(page)
         print(f"📊 Badge-Zähler vor Upload: {count_before}")
 
-        await fi.set_input_files(abs_path)
+        fi.set_input_files(abs_path)
         print(f"✅ Datei gesetzt: {filename}")
-        await asyncio.sleep(3)
+        time.sleep(3)
 
         # ── Bestätigung per Badge ─────────────────────────────────
         print("⏳ Warte auf Upload-Bestätigung...")
         for attempt in range(10):
             print(f"   🔄 Refresh {attempt + 1}/10...")
-            await page.reload(wait_until="domcontentloaded")
-            await asyncio.sleep(4)
-            count_after = await _get_badge_count(page)
+            page.reload(wait_until="domcontentloaded")
+            time.sleep(4)
+            count_after = _get_badge_count(page)
             print(f"   📊 Badge: {count_after}")
             if count_after is not None and count_before is not None and count_after > count_before:
                 print(f"✅ Upload bestätigt! {count_before} → {count_after}")
                 break
-            elif count_after is None and count_before is None:
-                print("ℹ️  Badge nicht gefunden — vermutlich ok")
-                break
+            elif count_after is None:
+                print("⚠️  Badge immer noch nicht gefunden")
         else:
             print("⚠️  Timeout — möglicherweise trotzdem hochgeladen")
 
         print(f"\n✅ Upload abgeschlossen: {filename}")
-        await browser.close()
+        browser.close()
 
     proc.terminate()
     return {"status": "ok", "filename": filename, "file": file_path}
@@ -330,5 +337,5 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python3 lexware.py <pdf-path>")
         sys.exit(1)
-    result = asyncio.run(run_lexware_upload(sys.argv[1]))
+    result = run_lexware_upload(sys.argv[1])
     print(result)
