@@ -137,7 +137,7 @@ async def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v32")
+    print(f"\n🚀 Starte Lexware Upload v35")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
@@ -255,11 +255,11 @@ Array.from(document.querySelectorAll('button, a, [role="button"]'))
         else:
             print("✅ Bereits eingeloggt")
 
-        # ── Badge VOR Upload auf Übersichtsseite lesen ───────────
-        LEXWARE_OVERVIEW_URL = "https://app.lexware.de/vouchers#!/VoucherList/?filter=unchecked"
-        print(f"📖 Lese Badge-Zähler auf Übersichtsseite...")
+        # ── Badge VOR Upload lesen ────────────────────────────────
+        LEXWARE_LIST_URL = "https://app.lexware.de/vouchers#!/VoucherList/"
+        print(f"📖 Lese Badge-Zähler vor Upload...")
         try:
-            await page.goto(LEXWARE_OVERVIEW_URL, wait_until="commit", timeout=15_000)
+            await page.goto(LEXWARE_LIST_URL, wait_until="networkidle", timeout=20_000)
         except Exception:
             pass
         await asyncio.sleep(3)
