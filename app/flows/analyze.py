@@ -26,6 +26,10 @@ def _normalize_date(raw: str) -> str | None:
         "Jan": "Jan", "Feb": "Feb", "Mär": "Mar", "Apr": "Apr",
         "Jun": "Jun", "Jul": "Jul", "Aug": "Aug", "Sep": "Sep",
         "Okt": "Oct", "Nov": "Nov", "Dez": "Dec",
+        # Mit Punkt
+        "Jan.": "Jan", "Feb.": "Feb", "Mär.": "Mar", "Apr.": "Apr",
+        "Jun.": "Jun", "Jul.": "Jul", "Aug.": "Aug", "Sep.": "Sep",
+        "Okt.": "Oct", "Nov.": "Nov", "Dez.": "Dec",
     }
     normalized = raw
     for de, en in de_months.items():
@@ -174,6 +178,7 @@ def _find_date(text: str) -> str | None:
         r"(\d{1,2}\.\d{2}\.\d{4})",
         r"(\d{1,2}\.\s*(?:Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\s*\d{4})",
         r"(\d{1,2}\.\s*(?:Jan|Feb|Mär|Apr|Mai|Jun|Jul|Aug|Sep|Okt|Nov|Dez)\.?\s*\d{4})",
+        r"(\d{1,2}\s+(?:Jan|Feb|Mär|Apr|Mai|Jun|Jul|Aug|Sep|Okt|Nov|Dez)\.?\s+\d{4})",
         r"(\d{1,2}\s+(?:Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\s+\d{4})",
     ]:
         m = re.search(pattern, normalized_text, re.IGNORECASE)
