@@ -629,6 +629,7 @@ async def analyze_invoice_endpoint(file: UploadFile = File(...)):
         tmp_path = tmp.name
     try:
         result = analyze_invoice(tmp_path)
+        print(f"📋 Rechnung analysiert: {result.get('suggested_filename', '?')} | Datum: {result.get('invoice_date', '?')} | Betrag: {result.get('amount', '?')}")
         return result
     finally:
         try:
