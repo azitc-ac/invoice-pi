@@ -101,15 +101,20 @@ def _extract_text(pdf_path: str) -> str:
 
 
 def _find_date(text: str) -> str | None:
+    # Zeilenumbrueche zwischen zusammengehoerenden Feldern zusammenfuehren
+    # z.B. "Rechnungsdatum" + newline + "/Lieferdatum 22 September 2021"
+    normalized_text = text.replace("\n/", "/")
+    normalized_text = re.sub(r"(\w)\n(\d)", r"\1 \2", normalized_text)
+
     for pattern in DATE_PATTERNS:
-        m = re.search(pattern, text, re.IGNORECASE)
+        m = re.search(pattern, normalized_text, re.IGNORECASE)
         if m:
             normalized = _normalize_date(m.group(1))
             if normalized:
                 return normalized
     # Fallback: Liefer- oder Leistungsdatum
     for pattern in DATE_FALLBACK_PATTERNS:
-        m = re.search(pattern, text, re.IGNORECASE)
+        m = re.search(pattern, normalized_text, re.IGNORECASE)
         if m:
             normalized = _normalize_date(m.group(1))
             if normalized:
