@@ -496,7 +496,10 @@
       <div>
         <div class="section-label">Session speichern</div>
         <div class="card">
-          <div class="card-title">Manueller Login</div>
+          <div class="card-title">Manueller Login (einmalig)</div>
+          <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:10px;">
+            Debug mode (VNC) muss aktiv sein.<br>Session wird gespeichert.
+          </div>
           <select id="session-site">
             <option value="freenet">Freenet</option>
             <option value="netaachen">NetAachen</option>
@@ -508,6 +511,12 @@
           </button>
           <div style="margin-top:8px;font-size:11px;color:var(--muted);font-family:var(--mono);">
             Credentials werden vorausgefüllt.<br>Nur noch Anmelden klicken.
+          </div>
+          <div style="margin-top:8px" id="session-vnc-hint" style="display:none">
+            <a id="session-vnc-link" href="#" target="_blank"
+               style="font-family:var(--mono);font-size:11px;color:var(--accent2);text-decoration:none;">
+              → noVNC öffnen ↗
+            </a>
           </div>
         </div>
       </div>
@@ -856,9 +865,13 @@
 
     toggle.checked = enabled;
     vncLink.style.display = enabled ? 'inline' : 'none';
+    const svHint = document.getElementById('session-vnc-hint');
+    if (svHint) svHint.style.display = enabled ? 'block' : 'none';
+    const svLink = document.getElementById('session-vnc-link');
     if (url) {
       vncLink.href = url; vncLink.textContent = `→ ${url} ↗`;
-      lvLink.href  = url;
+      if (lvLink) lvLink.href = url;
+      if (svLink) { svLink.href = url; svLink.textContent = `→ noVNC öffnen ↗`; }
       lvHint.style.display = enabled ? 'block' : 'none';
     }
   }
@@ -877,15 +890,30 @@
     }
   });
 
+  // ── Debug aktivieren und warten ──────────────────────────
+  async function ensureDebugActive() {
+    if (debugActive) return true;
+    toast('🖥️  Debug mode (VNC) wird gestartet...', 'info');
+    document.getElementById('debug-toggle').checked = true;
+    await fetch(`${API}/debug/start`, { method: 'POST', headers: authHeaders() });
+    // Warten bis aktiv (max 15s)
+    for (let i = 0; i < 30; i++) {
+      await new Promise(r => setTimeout(r, 500));
+      await fetchDebugStatus();
+      if (debugActive) { toast('✓ Debug mode (VNC) aktiv', 'success'); return true; }
+    }
+    toast('Debug mode (VNC) konnte nicht gestartet werden', 'error');
+    return false;
+  }
+
   // ── SESSION INIT (Download-Seiten) ────────────────────────
   async function initSession() {
     const site = document.getElementById('session-site').value;
     const btn  = document.getElementById('btn-session');
 
-    if (!debugActive) { toast('Debug-Modus muss aktiv sein!', 'error'); return; }
-
     setLoading(btn, true);
-    if (debugActive && vncUrl) window.open(vncUrl, 'novnc');
+    if (!await ensureDebugActive()) { setLoading(btn, false); return; }
+    if (vncUrl) window.open(vncUrl, 'novnc');
 
     try {
       const r = await fetch(`${API}/session/init`, {
@@ -907,9 +935,8 @@
   async function initLexwareSession() {
     const btn = document.getElementById('btn-lexware-session');
 
-    if (!debugActive) { toast('Debug-Modus muss aktiv sein! (Download-Tab)', 'error'); return; }
-
     setLoading(btn, true);
+    if (!await ensureDebugActive()) { setLoading(btn, false); return; }
     if (vncUrl) window.open(vncUrl, 'novnc');
 
     try {
@@ -1025,7 +1052,8 @@
     setLoading(btn, true);
     toast(`⬆ Lade hoch: ${selectedFile.name}...`, 'upload');
 
-    if (debugActive && vncUrl) window.open(vncUrl, 'novnc');
+    await ensureDebugActive();
+    if (vncUrl) window.open(vncUrl, 'novnc');
 
     const formData = new FormData();
     formData.append('file', selectedFile);
@@ -1102,7 +1130,8 @@
     setLoading(btn, true);
     toast(`⬆ Lade hoch: ${selectedDownloadPath.split('/').pop()}...`, 'upload');
 
-    if (debugActive && vncUrl) window.open(vncUrl, 'novnc');
+    await ensureDebugActive();
+    if (vncUrl) window.open(vncUrl, 'novnc');
 
     try {
       const r = await fetch(`${API}/upload/lexware/path`, {
