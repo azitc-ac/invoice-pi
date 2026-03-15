@@ -855,8 +855,18 @@
     } catch {}
   }
 
+  let _lastDebugState = null;
   function setDebugUI(enabled, url) {
+    if (_lastDebugState !== null && _lastDebugState !== enabled) {
+      appendLog(enabled ? `🖥️  Debug mode (VNC) aktiv` : `🖥️  Debug mode (VNC) beendet`);
+    }
+    _lastDebugState = enabled;
     debugActive = enabled;
+    // Session-Buttons (de)aktivieren je nach Debug-Status
+    ['btn-session', 'btn-lexware-session'].forEach(id => {
+      const b = document.getElementById(id);
+      if (b) b.disabled = !enabled;
+    });
     if (url) vncUrl = url;
     const toggle  = document.getElementById('debug-toggle');
     const vncLink = document.getElementById('vnc-link');
@@ -911,8 +921,8 @@
     const site = document.getElementById('session-site').value;
     const btn  = document.getElementById('btn-session');
 
+    if (!debugActive) { toast('Debug mode (VNC) muss aktiv sein!', 'error'); return; }
     setLoading(btn, true);
-    if (!await ensureDebugActive()) { setLoading(btn, false); return; }
     if (vncUrl) window.open(vncUrl, 'novnc');
 
     try {
@@ -935,8 +945,8 @@
   async function initLexwareSession() {
     const btn = document.getElementById('btn-lexware-session');
 
+    if (!debugActive) { toast('Debug mode (VNC) muss aktiv sein!', 'error'); return; }
     setLoading(btn, true);
-    if (!await ensureDebugActive()) { setLoading(btn, false); return; }
     if (vncUrl) window.open(vncUrl, 'novnc');
 
     try {
@@ -1255,9 +1265,7 @@
         // Log alle 2s solange Toggle aktiv
         if (enable) {
           appendLog(`🖥️  Debug mode (VNC) wird gestartet...`);
-          debugLogInterval = setInterval(() => appendLog(`🖥️  Debug mode (VNC) aktiv`), 2000);
         } else {
-          clearInterval(debugLogInterval);
           appendLog(`🖥️  Debug mode (VNC) wird beendet.`);
         }
         fetchDebugStatus();
