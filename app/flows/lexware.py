@@ -118,21 +118,27 @@ return findAndClick(document);
 
 
 async def _get_badge_count(page):
-    try:
-        return await page.evaluate("""
-// Suche alle Badge-Elemente und nimm den info-farbigen (grün)
-var candidates = document.querySelectorAll(".grld-bs-badge-info, span.grld-bs-badge-info");
-for (var i = 0; i < candidates.length; i++) {
-    var val = parseInt(candidates[i].textContent.trim(), 10);
-    if (!isNaN(val)) return val;
-}
-// Fallback: "Zu prüfen" Badge in der Sidebar
-var sidebar = document.querySelector("[class*='badge'][class*='info']");
-if (sidebar) return parseInt(sidebar.textContent.trim(), 10);
+    js = """
+var el = document.querySelector("span.grld-bs-badge-sidebar.grld-bs-badge-info, span.grld-bs-badge-info");
+if (el) return parseInt(el.textContent.trim(), 10);
 return null;
-""")
+"""
+    # Hauptframe
+    try:
+        result = await page.evaluate(js)
+        if result is not None:
+            return result
     except Exception:
-        return None
+        pass
+    # Alle iframes durchsuchen
+    for frame in page.frames:
+        try:
+            result = await frame.evaluate(js)
+            if result is not None:
+                return result
+        except Exception:
+            pass
+    return None
 
 
 async def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
@@ -143,7 +149,7 @@ async def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v26")
+    print(f"\n🚀 Starte Lexware Upload v27")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
