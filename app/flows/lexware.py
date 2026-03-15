@@ -137,7 +137,7 @@ async def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
 
     filename = os.path.basename(file_path)
     abs_path  = os.path.abspath(file_path)
-    print(f"\n🚀 Starte Lexware Upload v31")
+    print(f"\n🚀 Starte Lexware Upload v32")
     print(f"📄 Datei: {abs_path}")
 
     _fresh_profile()
@@ -255,6 +255,17 @@ Array.from(document.querySelectorAll('button, a, [role="button"]'))
         else:
             print("✅ Bereits eingeloggt")
 
+        # ── Badge VOR Upload auf Übersichtsseite lesen ───────────
+        LEXWARE_OVERVIEW_URL = "https://app.lexware.de/vouchers#!/VoucherList/?filter=unchecked"
+        print(f"📖 Lese Badge-Zähler auf Übersichtsseite...")
+        try:
+            await page.goto(LEXWARE_OVERVIEW_URL, wait_until="commit", timeout=15_000)
+        except Exception:
+            pass
+        await asyncio.sleep(3)
+        count_before = await _get_badge_count(page)
+        print(f"📊 Badge-Zähler vor Upload: {count_before}")
+
         # ── Direkt zur Voucher-URL navigieren ───
         print(f"📖 Navigiere direkt zu Voucher-Editor...")
         try:
@@ -267,10 +278,6 @@ Array.from(document.querySelectorAll('button, a, [role="button"]'))
         # ── File-Input ────────────────────────────────────────────
         print("🖱️  Suche File-Input...")
         await asyncio.sleep(2)
-
-        # Badge VOR Upload lesen (wir sind bereits auf der Voucher-Seite)
-        count_before = await _get_badge_count(page)
-        print(f"📊 Badge-Zähler vor Upload: {count_before}")
 
         fi = None
         deadline = asyncio.get_event_loop().time() + 30
