@@ -5,334 +5,115 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>invoice-pi · Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   :root {
-    --bg: #0d0f12;
-    --surface: #13161b;
-    --surface2: #1a1e25;
-    --border: #252a33;
-    --accent: #00e5a0;
-    --accent2: #0096ff;
-    --accent3: #a855f7;
-    --warn: #ff6b35;
-    --text: #e2e8f0;
-    --muted: #64748b;
-    --success: #00e5a0;
-    --danger: #ff4466;
-    --mono: 'JetBrains Mono', monospace;
-    --sans: 'DM Sans', sans-serif;
+    --bg: #0d0f12; --surface: #13161b; --surface2: #1a1e25; --border: #252a33;
+    --accent: #00e5a0; --accent2: #0096ff; --accent3: #a855f7; --warn: #ff6b35;
+    --text: #e2e8f0; --muted: #64748b; --success: #00e5a0; --danger: #ff4466;
+    --mono: 'JetBrains Mono', monospace; --sans: 'DM Sans', sans-serif;
   }
-
   * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--sans);
-    min-height: 100vh;
-    display: grid;
-    grid-template-rows: auto 1fr;
-  }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }
 
   /* HEADER */
-  header {
-    border-bottom: 1px solid var(--border);
-    padding: 20px 32px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    background: var(--surface);
-  }
-
-  .logo {
-    font-family: var(--mono);
-    font-weight: 700;
-    font-size: 18px;
-    color: var(--accent);
-    letter-spacing: -0.5px;
-  }
+  header { border-bottom: 1px solid var(--border); padding: 16px 32px; display: flex; align-items: center; gap: 16px; background: var(--surface); }
+  .logo { font-family: var(--mono); font-weight: 700; font-size: 18px; color: var(--accent); letter-spacing: -0.5px; }
   .logo span { color: var(--muted); font-weight: 400; }
+  .logo-ver { font-size: 10px; color: var(--border); font-weight: 400; margin-left: 6px; }
 
-  .status-pill {
-    margin-left: auto;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--muted);
-  }
+  .header-debug { display: flex; align-items: center; gap: 10px; margin-left: 20px; padding: 6px 14px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; transition: border-color 0.2s; }
+  .header-debug:has(input:checked) { border-color: var(--accent); }
+  .header-debug-label { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .header-debug:has(input:checked) .header-debug-label { color: var(--accent); }
 
+  .status-pill { margin-left: auto; display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); transition: background 0.3s; }
   .dot.online  { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
   .dot.offline { background: var(--danger); }
 
   /* LAYOUT */
-  main {
-    display: grid;
-    grid-template-columns: 340px 1fr;
-    gap: 0;
-    height: calc(100vh - 65px);
-  }
-
-  /* SIDEBAR */
-  aside {
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    background: var(--surface);
-  }
+  main { display: grid; grid-template-columns: 340px 1fr; gap: 0; height: calc(100vh - 61px); }
+  aside { border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; background: var(--surface); }
 
   /* TABS */
-  .tab-bar {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-
-  .tab-btn {
-    padding: 14px 0;
-    background: none;
-    border: none;
-    font-family: var(--mono);
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    color: var(--muted);
-    cursor: pointer;
-    position: relative;
-    transition: color 0.2s;
-  }
-
-  .tab-btn::after {
-    content: '';
-    position: absolute;
-    bottom: -1px; left: 20%; right: 20%;
-    height: 2px;
-    border-radius: 2px 2px 0 0;
-    background: transparent;
-    transition: background 0.2s;
-  }
-
+  .tab-bar { display: grid; grid-template-columns: 1fr 1fr 1fr; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .tab-btn { padding: 12px 0; background: none; border: none; font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); cursor: pointer; position: relative; transition: color 0.2s; }
+  .tab-btn::after { content: ''; position: absolute; bottom: -1px; left: 20%; right: 20%; height: 2px; border-radius: 2px 2px 0 0; background: transparent; transition: background 0.2s; }
   .tab-btn.active { color: var(--text); }
   .tab-btn.active.download::after { background: var(--accent); }
   .tab-btn.active.upload::after   { background: var(--accent3); }
-
+  .tab-btn.active.rename::after   { background: var(--accent2); }
   .tab-btn:hover:not(.active) { color: var(--text); }
 
   /* TAB PANELS */
-  .tab-panel {
-    display: none;
-    flex-direction: column;
-    gap: 24px;
-    padding: 28px 24px;
-    overflow-y: auto;
-    flex: 1;
-  }
+  .tab-panel { display: none; flex-direction: column; gap: 20px; padding: 24px 20px; overflow-y: auto; flex: 1; }
   .tab-panel.active { display: flex; }
 
-  .section-label {
-    font-family: var(--mono);
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 2px;
-    color: var(--muted);
-    text-transform: uppercase;
-    margin-bottom: 12px;
-  }
+  .section-label { font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; margin-bottom: 10px; }
 
   /* TOGGLE */
-  .toggle-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    transition: border-color 0.2s;
-  }
-  .toggle-row:has(.toggle-switch input:checked) {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent)22;
-  }
-
-  .toggle-label { font-size: 14px; font-weight: 500; color: var(--text); }
-  .toggle-sub   { font-size: 11px; color: var(--muted); margin-top: 2px; font-family: var(--mono); }
-
-  .toggle-switch { position: relative; width: 44px; height: 24px; }
+  .toggle-switch { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
   .toggle-switch input { opacity: 0; width: 0; height: 0; }
-  .slider {
-    position: absolute; inset: 0;
-    background: var(--border);
-    border-radius: 24px;
-    cursor: pointer;
-    transition: background 0.3s;
-  }
-  .slider::before {
-    content: '';
-    position: absolute;
-    width: 18px; height: 18px;
-    left: 3px; top: 3px;
-    background: var(--muted);
-    border-radius: 50%;
-    transition: transform 0.3s, background 0.3s;
-  }
+  .slider { position: absolute; inset: 0; background: var(--border); border-radius: 24px; cursor: pointer; transition: background 0.3s; }
+  .slider::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: var(--muted); border-radius: 50%; transition: transform 0.3s, background 0.3s; }
   .toggle-switch input:checked + .slider { background: var(--accent)33; }
   .toggle-switch input:checked + .slider::before { transform: translateX(20px); background: var(--accent); }
 
   /* CARD */
-  .card {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px;
-  }
-
-  .card-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 12px; }
+  .card { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .card-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px; }
+  .card-hint { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-bottom: 10px; line-height: 1.5; }
 
   /* SELECT */
-  select {
-    width: 100%;
-    background: var(--bg);
-    color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 7px;
-    padding: 9px 12px;
-    font-family: var(--sans);
-    font-size: 13px;
-    margin-bottom: 10px;
-    outline: none;
-    cursor: pointer;
-    transition: border-color 0.2s;
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 12px center;
-    padding-right: 32px;
-  }
+  select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 7px; padding: 9px 12px; font-family: var(--sans); font-size: 13px; margin-bottom: 10px; outline: none; cursor: pointer; transition: border-color 0.2s; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
   select:focus { border-color: var(--accent); }
 
-  /* BUTTON */
-  .btn {
-    width: 100%;
-    padding: 10px 16px;
-    border: none;
-    border-radius: 7px;
-    font-family: var(--sans);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    letter-spacing: 0.3px;
-  }
+  /* CHECKBOX ROW */
+  .check-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .check-row input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+  .check-row label { font-size: 12px; color: var(--muted); font-family: var(--mono); cursor: pointer; }
 
+  /* BUTTON */
+  .btn { width: 100%; padding: 10px 16px; border: none; border-radius: 7px; font-family: var(--sans); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; letter-spacing: 0.3px; }
   .btn-primary   { background: var(--accent); color: #000; }
   .btn-primary:hover { background: #00ffb3; transform: translateY(-1px); }
-
   .btn-purple    { background: var(--accent3); color: #fff; }
   .btn-purple:hover { background: #c084fc; transform: translateY(-1px); }
-
   .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
   .btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); }
-
+  .btn-ghost { background: transparent; color: var(--muted); border: 1px dashed var(--border); }
+  .btn-ghost:hover { border-color: var(--muted); color: var(--text); }
   .btn-danger    { background: var(--danger)22; color: var(--danger); border: 1px solid var(--danger)44; }
   .btn-danger:hover { background: var(--danger)33; }
-
   .btn:disabled  { opacity: 0.4; cursor: not-allowed; transform: none !important; }
   .btn:active    { transform: translateY(0) !important; }
+  .btn + .btn { margin-top: 6px; }
 
   /* SPINNER */
-  .spinner {
-    width: 14px; height: 14px;
-    border: 2px solid transparent;
-    border-top-color: currentColor;
-    border-radius: 50%;
-    animation: spin 0.6s linear infinite;
-    display: none;
-  }
+  .spinner { width: 14px; height: 14px; border: 2px solid transparent; border-top-color: currentColor; border-radius: 50%; animation: spin 0.6s linear infinite; display: none; }
   .loading .spinner  { display: block; }
   .loading .btn-icon { display: none; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* FILE DROP ZONE */
-  .drop-zone {
-    border: 2px dashed var(--border);
-    border-radius: 10px;
-    padding: 28px 16px;
-    text-align: center;
-    cursor: pointer;
-    transition: border-color 0.2s, background 0.2s;
-    background: var(--bg);
-    position: relative;
-  }
-  .drop-zone:hover, .drop-zone.drag-over {
-    border-color: var(--accent3);
-    background: var(--accent3)08;
-  }
-  .drop-zone input[type='file'] {
-    position: absolute; inset: 0;
-    opacity: 0; cursor: pointer;
-    width: 100%; height: 100%;
-    margin: 0; padding: 0;
-    border: none; background: none;
-  }
-  .drop-icon { font-size: 28px; margin-bottom: 8px; }
+  .drop-zone { border: 2px dashed var(--border); border-radius: 10px; padding: 24px 16px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; background: var(--bg); position: relative; }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: var(--accent3); background: var(--accent3)08; }
+  .drop-zone input[type='file'] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; margin: 0; padding: 0; border: none; background: none; }
+  .drop-icon  { font-size: 26px; margin-bottom: 6px; }
   .drop-label { font-size: 13px; color: var(--text); font-weight: 500; margin-bottom: 4px; }
   .drop-sub   { font-size: 11px; color: var(--muted); font-family: var(--mono); }
 
   /* FILE PREVIEW */
-  .file-preview {
-    display: none;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    background: var(--accent3)11;
-    border: 1px solid var(--accent3)44;
-    border-radius: 7px;
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--accent3);
-    margin-bottom: 10px;
-  }
+  .file-preview { display: none; align-items: center; gap: 10px; padding: 10px 12px; background: var(--accent3)11; border: 1px solid var(--accent3)44; border-radius: 7px; font-family: var(--mono); font-size: 12px; color: var(--accent3); margin-bottom: 10px; }
   .file-preview.visible { display: flex; }
   .file-preview-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .file-preview-clear {
-    background: none; border: none; color: var(--muted);
-    cursor: pointer; font-size: 14px; padding: 0 2px;
-    line-height: 1;
-  }
+  .file-preview-clear { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1; }
   .file-preview-clear:hover { color: var(--danger); }
 
   /* DOWNLOAD FILE LIST */
-  .file-list {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    max-height: 160px;
-    overflow-y: auto;
-  }
-  .file-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 7px 10px;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--muted);
-    cursor: pointer;
-    transition: border-color 0.15s, color 0.15s;
-  }
+  .file-list { display: flex; flex-direction: column; gap: 4px; max-height: 150px; overflow-y: auto; }
+  .file-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; font-family: var(--mono); font-size: 11px; color: var(--muted); cursor: pointer; transition: border-color 0.15s, color 0.15s; }
   .file-item:hover { border-color: var(--accent3); color: var(--text); }
   .file-item.selected { border-color: var(--accent3); color: var(--accent3); background: var(--accent3)0d; }
   .file-item-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -340,25 +121,8 @@
   .file-list-empty { font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: center; padding: 16px 0; }
 
   /* TOAST */
-  #toast-container {
-    position: fixed;
-    bottom: 24px; right: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    z-index: 100;
-  }
-  .toast {
-    padding: 10px 16px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-family: var(--mono);
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    color: var(--text);
-    animation: slideIn 0.2s ease;
-    max-width: 320px;
-  }
+  #toast-container { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
+  .toast { padding: 10px 16px; border-radius: 8px; font-size: 13px; font-family: var(--mono); background: var(--surface2); border: 1px solid var(--border); color: var(--text); animation: slideIn 0.2s ease; max-width: 320px; }
   .toast.success { border-color: var(--accent);  color: var(--accent); }
   .toast.error   { border-color: var(--danger);  color: var(--danger); }
   .toast.info    { border-color: var(--accent2); color: var(--accent2); }
@@ -366,58 +130,17 @@
   @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
   /* LOG AREA */
-  .log-panel {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    min-height: 0;
-    background: var(--bg);
-    overflow: hidden;
-  }
-  .log-header {
-    padding: 16px 24px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    background: var(--surface);
-  }
-  .log-title { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text); }
-  .log-badge {
-    font-family: var(--mono);
-    font-size: 10px;
-    padding: 3px 8px;
-    border-radius: 4px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    color: var(--muted);
-  }
+  .log-panel { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--bg); overflow: hidden; }
+  .log-header { padding: 14px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; background: var(--surface); }
+  .log-title  { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text); }
+  .log-badge  { font-family: var(--mono); font-size: 10px; padding: 3px 8px; border-radius: 4px; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); }
   .log-badge.connected { background: var(--accent)11; border-color: var(--accent)44; color: var(--accent); }
   .log-controls { margin-left: auto; display: flex; gap: 8px; }
-  .icon-btn {
-    padding: 6px 10px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: var(--muted);
-    cursor: pointer;
-    font-size: 12px;
-    font-family: var(--mono);
-    transition: all 0.2s;
-  }
+  .icon-btn { padding: 6px 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--muted); cursor: pointer; font-size: 12px; font-family: var(--mono); transition: all 0.2s; }
   .icon-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+  .icon-btn.active { border-color: var(--accent); color: var(--accent); }
 
-  #log-output {
-    flex: 1;
-    min-height: 0;
-    overflow-y: scroll;
-    padding: 16px 24px;
-    font-family: var(--mono);
-    font-size: 12px;
-    line-height: 1.7;
-    color: #94a3b8;
-    scroll-behavior: smooth;
-  }
+  #log-output { flex: 1; min-height: 0; overflow-y: scroll; padding: 16px 24px; font-family: var(--mono); font-size: 12px; line-height: 1.7; color: #94a3b8; scroll-behavior: smooth; }
   #log-output::-webkit-scrollbar { width: 6px; }
   #log-output::-webkit-scrollbar-track { background: transparent; }
   #log-output::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
@@ -432,14 +155,21 @@
   .log-line.highlight{ color: var(--accent2); }
   .log-line.upload   { color: var(--accent3); }
   .log-empty { color: var(--muted); text-align: center; padding: 60px 0; font-size: 13px; }
-
   .divider { height: 1px; background: var(--border); margin: 4px 0; }
 </style>
 </head>
 <body>
 
 <header>
-  <div class="logo">invoice<span>-pi</span> · admin <span style="font-size:10px;color:var(--border);font-weight:400;">v1.1</span></div>
+  <div class="logo">invoice<span>-pi</span> · admin <span class="logo-ver">v1.2</span></div>
+  <div class="header-debug">
+    <label class="toggle-switch" style="width:36px;height:20px;">
+      <input type="checkbox" id="debug-toggle">
+      <span class="slider"></span>
+    </label>
+    <span class="header-debug-label" id="debug-header-label">Debug mode (VNC)</span>
+    <a id="vnc-link" href="#" target="_blank" style="display:none;font-family:var(--mono);font-size:11px;color:var(--accent2);text-decoration:none;margin-left:4px;">↗ noVNC</a>
+  </div>
   <div class="status-pill">
     <div class="dot" id="health-dot"></div>
     <span id="health-text">checking...</span>
@@ -448,60 +178,44 @@
 
 <main>
   <aside>
-
-    <!-- TAB BAR -->
     <div class="tab-bar">
       <button class="tab-btn download active" onclick="switchTab('download')">⬇ Download</button>
       <button class="tab-btn upload"          onclick="switchTab('upload')">⬆ Upload</button>
+      <button class="tab-btn rename"          onclick="switchTab('rename')">✏ Rename</button>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════ -->
-    <!-- TAB: DOWNLOAD                                       -->
-    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- ═══════════════ TAB: DOWNLOAD ═══════════════ -->
     <div class="tab-panel active" id="tab-download">
 
-      <!-- DEBUG MODE -->
-      <div>
-        <div class="section-label">Debug Mode</div>
-        <div class="toggle-row">
-          <div>
-            <div class="toggle-label">VNC / sichtbarer Browser</div>
-            <div class="toggle-sub" id="debug-sub">inaktiv</div>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="debug-toggle">
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div style="margin-top:10px;display:none" id="vnc-link-row">
-          <a id="vnc-link" href="#" target="_blank"
-             style="font-family:var(--mono);font-size:11px;color:var(--accent2);text-decoration:none;">
-            → noVNC öffnen ↗
-          </a>
-        </div>
-      </div>
-
-      <!-- SESSION SPEICHERN -->
+      <!-- SESSION -->
       <div>
         <div class="section-label">Session speichern</div>
         <div class="card">
-          <div class="card-title">Manueller Login</div>
+          <div class="card-title">Manueller Login (einmalig)</div>
+          <div class="card-hint">Debug mode (VNC) muss aktiv sein.<br>Session wird gespeichert.</div>
           <select id="session-site">
             <option value="freenet">Freenet</option>
             <option value="netaachen">NetAachen</option>
           </select>
-          <button class="btn btn-secondary" id="btn-session" onclick="initSession()">
+          <div class="check-row">
+            <input type="checkbox" id="session-save-check" checked>
+            <label for="session-save-check">Session speichern</label>
+          </div>
+          <button class="btn btn-secondary" id="btn-session" onclick="initSession()" disabled>
             <span class="btn-icon">🔐</span>
             <div class="spinner"></div>
             Browser öffnen &amp; Login
           </button>
-          <div style="margin-top:8px;font-size:11px;color:var(--muted);font-family:var(--mono);">
+          <div style="margin-top:6px;font-size:11px;color:var(--muted);font-family:var(--mono);">
             Credentials werden vorausgefüllt.<br>Nur noch Anmelden klicken.
+          </div>
+          <div style="margin-top:8px;display:none" id="session-vnc-hint">
+            <a id="session-vnc-link" href="#" target="_blank" style="font-family:var(--mono);font-size:11px;color:var(--accent2);text-decoration:none;">→ noVNC öffnen ↗</a>
           </div>
         </div>
       </div>
 
-      <!-- DOWNLOAD TEST -->
+      <!-- DOWNLOAD -->
       <div>
         <div class="section-label">Lokaler Download-Test</div>
         <div class="card">
@@ -525,9 +239,7 @@
         <div class="section-label">Wartung</div>
         <div class="card">
           <div class="card-title">Browser-Locks aufräumen</div>
-          <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:8px;">
-            Wenn ein Download hängt oder "profile in use" Fehler auftritt.
-          </div>
+          <div class="card-hint">Wenn ein Download hängt oder "profile in use" Fehler auftritt.</div>
           <button class="btn btn-secondary" id="btn-cleanup" onclick="cleanupLocks()">
             <span class="btn-icon">🧹</span>
             <div class="spinner"></div>
@@ -537,14 +249,10 @@
       </div>
 
       <div style="flex:1"></div>
-      <div style="font-family:var(--mono);font-size:10px;color:var(--border);text-align:center;padding-bottom:8px;">
-        invoice-pi · fastapi + playwright
-      </div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--border);text-align:center;padding-bottom:8px;">invoice-pi · fastapi + playwright</div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════ -->
-    <!-- TAB: UPLOAD                                         -->
-    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- ═══════════════ TAB: UPLOAD ═══════════════ -->
     <div class="tab-panel" id="tab-upload">
 
       <!-- SESSION LEXWARE -->
@@ -552,19 +260,17 @@
         <div class="section-label">Lexware Session</div>
         <div class="card">
           <div class="card-title">Manueller Login (einmalig)</div>
-          <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:10px;">
-            Debug-Modus muss aktiv sein.<br>Session wird in /pwdata/lexware gespeichert.
-          </div>
-          <button class="btn btn-secondary" id="btn-lexware-session" onclick="initLexwareSession()">
+          <div class="card-hint">Debug mode (VNC) muss aktiv sein.<br>Session wird gespeichert.</div>
+          <button class="btn btn-secondary" id="btn-lexware-session" onclick="initLexwareSession()" disabled>
             <span class="btn-icon">🔐</span>
             <div class="spinner"></div>
             Lexware Login öffnen
           </button>
-          <div style="margin-top:8px" id="lexware-vnc-hint" style="display:none">
-            <a id="lexware-vnc-link" href="#" target="_blank"
-               style="font-family:var(--mono);font-size:11px;color:var(--accent2);text-decoration:none;">
-              → noVNC öffnen ↗
-            </a>
+          <div style="margin-top:6px;font-size:11px;color:var(--muted);font-family:var(--mono);">
+            Credentials werden vorausgefüllt.<br>Nur noch Anmelden klicken.
+          </div>
+          <div style="margin-top:8px;display:none" id="lexware-vnc-hint">
+            <a id="lexware-vnc-link" href="#" target="_blank" style="font-family:var(--mono);font-size:11px;color:var(--accent2);text-decoration:none;">→ noVNC öffnen ↗</a>
           </div>
         </div>
       </div>
@@ -574,26 +280,17 @@
         <div class="section-label">Beleg hochladen</div>
         <div class="card">
           <div class="card-title">Datei zu Lexware</div>
-
-          <!-- Drop Zone -->
-          <div class="drop-zone" id="drop-zone"
-               ondragover="onDragOver(event)"
-               ondragleave="onDragLeave(event)"
-               ondrop="onDrop(event)">
-            <input type="file" id="file-input" accept=".pdf,.png,.jpg,.jpeg,.xml"
-                   onchange="onFileSelected(event)">
+          <div class="drop-zone" id="drop-zone" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+            <input type="file" id="file-input" accept=".pdf,.png,.jpg,.jpeg,.xml" onchange="onFileSelected(event)">
             <div class="drop-icon">📄</div>
             <div class="drop-label">PDF hier ablegen</div>
             <div class="drop-sub">oder klicken zum Auswählen</div>
           </div>
-
-          <!-- Datei-Vorschau -->
           <div class="file-preview" id="file-preview">
             <span>📎</span>
             <span class="file-preview-name" id="file-preview-name"></span>
             <button class="file-preview-clear" onclick="clearFile()" title="Entfernen">✕</button>
           </div>
-
           <button class="btn btn-purple" id="btn-upload" onclick="uploadToLexware()" disabled>
             <span class="btn-icon">⬆</span>
             <div class="spinner"></div>
@@ -602,27 +299,21 @@
         </div>
       </div>
 
-      <!-- LOKAL GESPEICHERTE DOWNLOADS HOCHLADEN -->
+      <!-- AUS DOWNLOADS -->
       <div>
         <div class="section-label">Aus Downloads hochladen</div>
         <div class="card">
           <div class="card-title">Gespeicherte Rechnungen</div>
-          <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:10px;">
-            Wähle eine lokal gespeicherte Rechnung aus.
-          </div>
+          <div class="card-hint">Wähle eine lokal gespeicherte Rechnung aus.</div>
           <button class="btn btn-secondary" id="btn-refresh-list" onclick="loadDownloadsList()" style="margin-bottom:10px;">
-            <span class="btn-icon">🔄</span>
-            <div class="spinner"></div>
-            Liste aktualisieren
+            <span class="btn-icon">🔄</span><div class="spinner"></div>Liste aktualisieren
           </button>
           <div class="file-list" id="downloads-list">
             <div class="file-list-empty">Liste laden ↑</div>
           </div>
           <div style="margin-top:10px">
             <button class="btn btn-purple" id="btn-upload-path" onclick="uploadByPath()" disabled>
-              <span class="btn-icon">⬆</span>
-              <div class="spinner"></div>
-              Ausgewählte Datei hochladen
+              <span class="btn-icon">⬆</span><div class="spinner"></div>Ausgewählte Datei hochladen
             </button>
           </div>
           <div style="margin-top:8px;font-size:11px;color:var(--muted);font-family:var(--mono);" id="selected-path-label"></div>
@@ -630,9 +321,58 @@
       </div>
 
       <div style="flex:1"></div>
-      <div style="font-family:var(--mono);font-size:10px;color:var(--border);text-align:center;padding-bottom:8px;">
-        invoice-pi · lexware upload
+      <div style="font-family:var(--mono);font-size:10px;color:var(--border);text-align:center;padding-bottom:8px;">invoice-pi · lexware upload</div>
+    </div>
+
+    <!-- ═══════════════ TAB: RENAME ═══════════════ -->
+    <div class="tab-panel" id="tab-rename">
+
+      <!-- UMBENENNEN + DOWNLOAD -->
+      <div>
+        <div class="section-label">Umbenennen &amp; Herunterladen</div>
+        <div class="card">
+          <div class="card-title">Rechnungen umbenennen</div>
+          <div class="card-hint">PDFs hochladen → automatisch umbenennen → als ZIP herunterladen.</div>
+          <div class="drop-zone" id="rename-drop-zone" ondragover="onRenameDragOver(event)" ondragleave="onRenameDragLeave(event)" ondrop="onRenameDrop(event)">
+            <input type="file" id="rename-file-input" accept=".pdf" multiple onchange="onRenameFilesSelected(event)">
+            <div class="drop-icon">📄</div>
+            <div class="drop-label">PDFs hier ablegen</div>
+            <div class="drop-sub">mehrere Dateien möglich</div>
+          </div>
+          <div id="rename-file-list" style="margin-top:10px;display:none;">
+            <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:6px;" id="rename-file-count"></div>
+            <div class="file-list" id="rename-files-preview" style="max-height:100px;"></div>
+          </div>
+          <button class="btn btn-secondary" id="btn-rename" onclick="renameAndDownload()" disabled style="margin-top:10px;">
+            <span class="btn-icon">✏</span><div class="spinner"></div>Umbenennen &amp; als ZIP laden
+          </button>
+          <button class="btn btn-danger" id="btn-rename-clear" onclick="clearRenameFiles()" style="margin-top:6px;display:none;">
+            <span class="btn-icon">✕</span>Auswahl leeren
+          </button>
+        </div>
       </div>
+
+      <!-- NUR ANALYSIEREN -->
+      <div>
+        <div class="section-label">Nur analysieren (Log)</div>
+        <div class="card">
+          <div class="card-title">Rechnungsdaten auslesen</div>
+          <div class="card-hint">Ergebnis wird im Log rechts angezeigt.</div>
+          <div class="drop-zone" id="analyze-drop-zone" ondragover="onAnalyzeDragOver(event)" ondragleave="onAnalyzeDragLeave(event)" ondrop="onAnalyzeDrop(event)">
+            <input type="file" id="analyze-file-input" accept=".pdf" multiple onchange="onAnalyzeFilesSelected(event)">
+            <div class="drop-icon">🔍</div>
+            <div class="drop-label">PDFs hier ablegen</div>
+            <div class="drop-sub">mehrere Dateien möglich</div>
+          </div>
+          <div id="analyze-file-count" style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:6px;"></div>
+          <button class="btn btn-secondary" id="btn-analyze" onclick="analyzeFiles()" disabled style="margin-top:10px;">
+            <span class="btn-icon">🔍</span><div class="spinner"></div>Analysieren
+          </button>
+        </div>
+      </div>
+
+      <div style="flex:1"></div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--border);text-align:center;padding-bottom:8px;">invoice-pi · rename &amp; analyze</div>
     </div>
 
   </aside>
@@ -662,13 +402,9 @@
   <div style="background:#13161b;border:1px solid #252a33;border-radius:14px;padding:36px;width:360px;display:flex;flex-direction:column;gap:16px;">
     <div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;color:#00e5a0;">invoice-pi · admin</div>
     <div style="font-size:13px;color:#64748b;font-family:'DM Sans',sans-serif;">API-Key eingeben um fortzufahren</div>
-    <input id="key-input" type="password" placeholder="X-API-Key"
-      style="background:#0d0f12;color:#e2e8f0;border:1px solid #252a33;border-radius:7px;padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:13px;outline:none;width:100%;">
+    <input id="key-input" type="password" placeholder="X-API-Key" style="background:#0d0f12;color:#e2e8f0;border:1px solid #252a33;border-radius:7px;padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:13px;outline:none;width:100%;">
     <div id="key-error" style="display:none;font-size:12px;color:#ff4466;font-family:'JetBrains Mono',monospace;">❌ Ungültiger API-Key</div>
-    <button id="key-submit-btn" onclick="submitApiKey()"
-      style="background:#00e5a0;color:#000;border:none;border-radius:7px;padding:10px;font-family:'DM Sans',sans-serif;font-weight:600;font-size:13px;cursor:pointer;">
-      Anmelden
-    </button>
+    <button id="key-submit-btn" onclick="submitApiKey()" style="background:#00e5a0;color:#000;border:none;border-radius:7px;padding:10px;font-family:'DM Sans',sans-serif;font-weight:600;font-size:13px;cursor:pointer;">Anmelden</button>
   </div>
 </div>
 
@@ -681,58 +417,31 @@
   let vncUrl = null;
   let selectedFile = null;
   let selectedDownloadPath = null;
+  let renameFiles = [];
+  let analyzeFiles_ = [];
 
   // ── API KEY ───────────────────────────────────────────────
   let apiKey = sessionStorage.getItem('invoice_pi_api_key') || '';
-
-  function authHeaders(extra = {}) {
-    return { 'X-API-Key': apiKey, ...extra };
-  }
+  function authHeaders(extra = {}) { return { 'X-API-Key': apiKey, ...extra }; }
 
   async function verifyApiKey(key) {
-    try {
-      const r = await fetch(`${API}/health`, { headers: { 'X-API-Key': key } });
-      return r.ok;
-    } catch { return false; }
+    try { const r = await fetch(`${API}/health`, { headers: { 'X-API-Key': key } }); return r.ok; }
+    catch { return false; }
   }
-
-  function showKeyDialog() {
-    document.getElementById('key-overlay').style.display = 'flex';
-    document.getElementById('key-input').focus();
-  }
-
-  function hideKeyDialog() {
-    document.getElementById('key-overlay').style.display = 'none';
-  }
+  function showKeyDialog() { document.getElementById('key-overlay').style.display = 'flex'; document.getElementById('key-input').focus(); }
+  function hideKeyDialog() { document.getElementById('key-overlay').style.display = 'none'; }
 
   async function submitApiKey() {
     const key = document.getElementById('key-input').value.trim();
     const btn = document.getElementById('key-submit-btn');
     const err = document.getElementById('key-error');
     if (!key) return;
-
-    btn.disabled = true;
-    btn.textContent = 'Prüfe...';
-    err.style.display = 'none';
-
+    btn.disabled = true; btn.textContent = 'Prüfe...'; err.style.display = 'none';
     const ok = await verifyApiKey(key);
-    if (ok) {
-      apiKey = key;
-      sessionStorage.setItem('invoice_pi_api_key', key);
-      hideKeyDialog();
-      initApp();
-    } else {
-      err.style.display = 'block';
-      btn.disabled = false;
-      btn.textContent = 'Anmelden';
-    }
+    if (ok) { apiKey = key; sessionStorage.setItem('invoice_pi_api_key', key); hideKeyDialog(); initApp(); }
+    else { err.style.display = 'block'; btn.disabled = false; btn.textContent = 'Anmelden'; }
   }
-
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && document.getElementById('key-overlay').style.display === 'flex') {
-      submitApiKey();
-    }
-  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && document.getElementById('key-overlay').style.display === 'flex') submitApiKey(); });
 
   // ── TABS ──────────────────────────────────────────────────
   function switchTab(name) {
@@ -764,58 +473,69 @@
     } catch {}
   }
 
+  let _lastDebugState = null;
   function setDebugUI(enabled, url) {
+    if (_lastDebugState !== null && _lastDebugState !== enabled) {
+      appendLog(enabled ? '🖥️  Debug mode (VNC) aktiv' : '🖥️  Debug mode (VNC) beendet');
+    }
+    _lastDebugState = enabled;
     debugActive = enabled;
     if (url) vncUrl = url;
+
     const toggle  = document.getElementById('debug-toggle');
-    const sub     = document.getElementById('debug-sub');
-    const vncRow  = document.getElementById('vnc-link-row');
     const vncLink = document.getElementById('vnc-link');
+    const svHint  = document.getElementById('session-vnc-hint');
+    const svLink  = document.getElementById('session-vnc-link');
     const lvHint  = document.getElementById('lexware-vnc-hint');
     const lvLink  = document.getElementById('lexware-vnc-link');
 
     toggle.checked = enabled;
-    sub.textContent = enabled ? 'aktiv — Browser sichtbar' : 'inaktiv';
-    vncRow.style.display = enabled ? 'block' : 'none';
+    vncLink.style.display = enabled ? 'inline' : 'none';
+    if (svHint) svHint.style.display = enabled ? 'block' : 'none';
     if (url) {
-      vncLink.href = url; vncLink.textContent = `→ ${url} ↗`;
-      lvLink.href  = url;
-      lvHint.style.display = enabled ? 'block' : 'none';
+      vncLink.href = url;
+      if (svLink) { svLink.href = url; }
+      if (lvLink) { lvLink.href = url; }
+      if (lvHint) lvHint.style.display = enabled ? 'block' : 'none';
     }
+
+    // Session-Buttons (de)aktivieren
+    ['btn-session', 'btn-lexware-session'].forEach(id => {
+      const b = document.getElementById(id);
+      if (b) b.disabled = !enabled;
+    });
   }
 
   document.getElementById('debug-toggle').addEventListener('change', async (e) => {
     const enable = e.target.checked;
-    const endpoint = enable ? '/debug/enable' : '/debug/disable';
+    const endpoint = enable ? '/debug/start' : '/debug/stop';
     try {
-      const r = await fetch(`${API}${endpoint}`, { method: 'POST', headers: authHeaders() });
-      const d = await r.json();
-      setDebugUI(d.debug_enabled ?? enable, d.vnc_url);
-      toast(enable ? 'Debug-Modus aktiviert' : 'Debug-Modus deaktiviert', enable ? 'success' : 'info');
+      await fetch(`${API}${endpoint}`, { method: 'POST', headers: authHeaders() });
+      if (enable) appendLog('🖥️  Debug mode (VNC) wird gestartet...');
+      else appendLog('🖥️  Debug mode (VNC) wird beendet.');
+      fetchDebugStatus();
     } catch (err) {
       toast('Fehler: ' + err.message, 'error');
       e.target.checked = !enable;
     }
   });
 
-  // ── SESSION INIT (Download-Seiten) ────────────────────────
+  // ── SESSION INIT ──────────────────────────────────────────
   async function initSession() {
     const site = document.getElementById('session-site').value;
-    const btn  = document.getElementById('btn-session');
-
-    if (!debugActive) { toast('Debug-Modus muss aktiv sein!', 'error'); return; }
-
+    const saveSession = document.getElementById('session-save-check').checked;
+    const btn = document.getElementById('btn-session');
+    if (!debugActive) { toast('Debug mode (VNC) muss aktiv sein!', 'error'); return; }
     setLoading(btn, true);
-    if (debugActive && vncUrl) window.open(vncUrl, 'novnc');
-
+    if (vncUrl) window.open(vncUrl, 'novnc');
     try {
       const r = await fetch(`${API}/session/init`, {
         method: 'POST',
         headers: authHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ site })
+        body: JSON.stringify({ site, save_session: saveSession })
       });
       const d = await r.json();
-      if (r.ok) toast(`Browser geöffnet für ${site} — bitte einloggen`, 'success');
+      if (r.ok) toast(`Browser geöffnet für ${site}${saveSession ? ' — Session wird gespeichert' : ' — nur Ansicht'}`, 'success');
       else toast(d.detail || 'Fehler', 'error');
     } catch (err) {
       toast('Fehler: ' + err.message, 'error');
@@ -824,23 +544,19 @@
     }
   }
 
-  // ── SESSION INIT (Lexware) ────────────────────────────────
   async function initLexwareSession() {
     const btn = document.getElementById('btn-lexware-session');
-
-    if (!debugActive) { toast('Debug-Modus muss aktiv sein! (Download-Tab)', 'error'); return; }
-
+    if (!debugActive) { toast('Debug mode (VNC) muss aktiv sein!', 'error'); return; }
     setLoading(btn, true);
     if (vncUrl) window.open(vncUrl, 'novnc');
-
     try {
       const r = await fetch(`${API}/session/init`, {
         method: 'POST',
         headers: authHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ site: 'lexware' })
+        body: JSON.stringify({ site: 'lexware', save_session: true })
       });
       const d = await r.json();
-      if (r.ok) toast('Lexware Browser geöffnet — bitte einloggen (5 min)', 'upload');
+      if (r.ok) toast('Lexware Browser geöffnet — bitte einloggen', 'upload');
       else toast(d.detail || 'Fehler', 'error');
     } catch (err) {
       toast('Fehler: ' + err.message, 'error');
@@ -851,41 +567,30 @@
 
   // ── DOWNLOAD ──────────────────────────────────────────────
   function getPrevMonthLabel() {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 1);
+    const d = new Date(); d.setMonth(d.getMonth() - 1);
     return d.toLocaleString('de-DE', { month: 'long', year: 'numeric' });
   }
 
   async function triggerDownload() {
-    const val    = document.getElementById('download-site').value;
+    const val = document.getElementById('download-site').value;
     const isPrev = val.endsWith('-prev');
-    const site   = isPrev ? val.replace('-prev', '') : val;
-    const btn    = document.getElementById('btn-download');
-
+    const site = isPrev ? val.replace('-prev', '') : val;
+    const btn = document.getElementById('btn-download');
     setLoading(btn, true);
     const label = isPrev ? `${site} (${getPrevMonthLabel()})` : site;
     toast(`Starte Download: ${label}...`, 'info');
-
     if (debugActive && vncUrl) window.open(vncUrl, 'novnc');
-
     try {
       const body = isPrev ? { site, month_offset: 1 } : { site };
-      const r = await fetch(`${API}/download`, {
-        method: 'POST',
-        headers: authHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify(body)
-      });
+      const r = await fetch(`${API}/download`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(body) });
       const d = await r.json();
       if (r.ok) toast(`✓ Gespeichert: ${d.files?.[0]?.split('/').pop() || 'OK'}`, 'success');
       else toast(d.detail || 'Fehler', 'error');
-    } catch (err) {
-      toast('Fehler: ' + err.message, 'error');
-    } finally {
-      setLoading(btn, false);
-    }
+    } catch (err) { toast('Fehler: ' + err.message, 'error'); }
+    finally { setLoading(btn, false); }
   }
 
-  // ── CLEANUP LOCKS ─────────────────────────────────────────
+  // ── CLEANUP ───────────────────────────────────────────────
   async function cleanupLocks() {
     const btn = document.getElementById('btn-cleanup');
     setLoading(btn, true);
@@ -894,42 +599,21 @@
       const d = await r.json();
       if (r.ok) toast(`🧹 ${d.message || 'Locks aufgeräumt'}`, 'success');
       else toast(d.detail || 'Fehler', 'error');
-    } catch (err) {
-      toast('Fehler: ' + err.message, 'error');
-    } finally {
-      setLoading(btn, false);
-    }
+    } catch (err) { toast('Fehler: ' + err.message, 'error'); }
+    finally { setLoading(btn, false); }
   }
 
-  // ── FILE DROP ZONE ────────────────────────────────────────
-  function onDragOver(e) {
-    e.preventDefault();
-    document.getElementById('drop-zone').classList.add('drag-over');
-  }
-
-  function onDragLeave(e) {
-    document.getElementById('drop-zone').classList.remove('drag-over');
-  }
-
-  function onDrop(e) {
-    e.preventDefault();
-    document.getElementById('drop-zone').classList.remove('drag-over');
-    const file = e.dataTransfer.files[0];
-    if (file) setSelectedFile(file);
-  }
-
-  function onFileSelected(e) {
-    const file = e.target.files[0];
-    if (file) setSelectedFile(file);
-  }
-
+  // ── FILE DROP ZONE (Upload) ───────────────────────────────
+  function onDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('drag-over'); }
+  function onDragLeave(e) { document.getElementById('drop-zone').classList.remove('drag-over'); }
+  function onDrop(e) { e.preventDefault(); document.getElementById('drop-zone').classList.remove('drag-over'); const f = e.dataTransfer.files[0]; if (f) setSelectedFile(f); }
+  function onFileSelected(e) { const f = e.target.files[0]; if (f) setSelectedFile(f); }
   function setSelectedFile(file) {
     selectedFile = file;
     document.getElementById('file-preview-name').textContent = file.name;
     document.getElementById('file-preview').classList.add('visible');
     document.getElementById('btn-upload').disabled = false;
   }
-
   function clearFile() {
     selectedFile = null;
     document.getElementById('file-preview').classList.remove('visible');
@@ -938,73 +622,39 @@
     document.getElementById('file-input').value = '';
   }
 
-  // ── UPLOAD: Datei direkt hochladen ────────────────────────
   async function uploadToLexware() {
     if (!selectedFile) { toast('Keine Datei ausgewählt', 'error'); return; }
-
     const btn = document.getElementById('btn-upload');
     setLoading(btn, true);
     toast(`⬆ Lade hoch: ${selectedFile.name}...`, 'upload');
-
     if (debugActive && vncUrl) window.open(vncUrl, 'novnc');
-
-    const formData = new FormData();
-    formData.append('file', selectedFile);
-
+    const fd = new FormData(); fd.append('file', selectedFile);
     try {
-      const r = await fetch(`${API}/upload/lexware`, {
-        method: 'POST',
-        headers: { 'X-API-Key': apiKey },
-        body: formData
-      });
+      const r = await fetch(`${API}/upload/lexware`, { method: 'POST', headers: { 'X-API-Key': apiKey }, body: fd });
       const d = await r.json();
-      if (r.ok) {
-        toast(`✓ Hochgeladen: ${d.filename}`, 'success');
-        clearFile();
-      } else {
-        toast(d.detail || 'Upload fehlgeschlagen', 'error');
-      }
-    } catch (err) {
-      toast('Fehler: ' + err.message, 'error');
-    } finally {
-      setLoading(btn, false);
-    }
+      if (r.ok) { toast(`✓ Hochgeladen: ${d.filename}`, 'success'); clearFile(); }
+      else toast(d.detail || 'Upload fehlgeschlagen', 'error');
+    } catch (err) { toast('Fehler: ' + err.message, 'error'); }
+    finally { setLoading(btn, false); }
   }
 
-  // ── DOWNLOAD-LIST laden ───────────────────────────────────
   async function loadDownloadsList() {
-    const btn  = document.getElementById('btn-refresh-list');
+    const btn = document.getElementById('btn-refresh-list');
     const list = document.getElementById('downloads-list');
     setLoading(btn, true);
-
     try {
       const r = await fetch(`${API}/downloads/list`, { headers: authHeaders() });
       const d = await r.json();
       list.innerHTML = '';
-
-      if (!d.files || d.files.length === 0) {
-        list.innerHTML = '<div class="file-list-empty">Keine PDFs gefunden</div>';
-        return;
-      }
-
+      if (!d.files || d.files.length === 0) { list.innerHTML = '<div class="file-list-empty">Keine PDFs gefunden</div>'; return; }
       d.files.forEach(f => {
-        const el = document.createElement('div');
-        el.className = 'file-item';
-        el.dataset.path = f.path;
-        el.innerHTML = `
-          <span>📄</span>
-          <span class="file-item-name">${f.name}</span>
-          <span class="file-item-size">${(f.size / 1024).toFixed(0)} KB</span>
-        `;
+        const el = document.createElement('div'); el.className = 'file-item'; el.dataset.path = f.path;
+        el.innerHTML = `<span>📄</span><span class="file-item-name">${f.name}</span><span class="file-item-size">${(f.size/1024).toFixed(0)} KB</span>`;
         el.addEventListener('click', () => selectDownloadFile(el, f.path, f.name));
         list.appendChild(el);
       });
-    } catch (err) {
-      list.innerHTML = '<div class="file-list-empty">Fehler beim Laden</div>';
-      toast('Fehler: ' + err.message, 'error');
-    } finally {
-      setLoading(btn, false);
-    }
+    } catch (err) { list.innerHTML = '<div class="file-list-empty">Fehler beim Laden</div>'; toast('Fehler: ' + err.message, 'error'); }
+    finally { setLoading(btn, false); }
   }
 
   function selectDownloadFile(el, path, name) {
@@ -1015,22 +665,14 @@
     document.getElementById('selected-path-label').textContent = `→ ${name}`;
   }
 
-  // ── UPLOAD: Lokale Datei hochladen ────────────────────────
   async function uploadByPath() {
     if (!selectedDownloadPath) { toast('Keine Datei ausgewählt', 'error'); return; }
-
     const btn = document.getElementById('btn-upload-path');
     setLoading(btn, true);
     toast(`⬆ Lade hoch: ${selectedDownloadPath.split('/').pop()}...`, 'upload');
-
     if (debugActive && vncUrl) window.open(vncUrl, 'novnc');
-
     try {
-      const r = await fetch(`${API}/upload/lexware/path`, {
-        method: 'POST',
-        headers: authHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ file_path: selectedDownloadPath })
-      });
+      const r = await fetch(`${API}/upload/lexware/path`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ file_path: selectedDownloadPath }) });
       const d = await r.json();
       if (r.ok) {
         toast(`✓ Hochgeladen: ${d.filename}`, 'success');
@@ -1038,45 +680,104 @@
         document.getElementById('btn-upload-path').disabled = true;
         document.getElementById('selected-path-label').textContent = '';
         document.querySelectorAll('.file-item').forEach(i => i.classList.remove('selected'));
-      } else {
-        toast(d.detail || 'Upload fehlgeschlagen', 'error');
+      } else toast(d.detail || 'Upload fehlgeschlagen', 'error');
+    } catch (err) { toast('Fehler: ' + err.message, 'error'); }
+    finally { setLoading(btn, false); }
+  }
+
+  // ── RENAME TAB ────────────────────────────────────────────
+  function onRenameDragOver(e) { e.preventDefault(); document.getElementById('rename-drop-zone').classList.add('drag-over'); }
+  function onRenameDragLeave() { document.getElementById('rename-drop-zone').classList.remove('drag-over'); }
+  function onRenameDrop(e) { e.preventDefault(); onRenameDragLeave(); addRenameFiles(e.dataTransfer.files); }
+  function onRenameFilesSelected(e) { addRenameFiles(e.target.files); }
+
+  function addRenameFiles(files) {
+    renameFiles = [...renameFiles, ...Array.from(files)];
+    updateRenameUI();
+  }
+  function updateRenameUI() {
+    const count = renameFiles.length;
+    document.getElementById('rename-file-count').textContent = `${count} Datei(en) ausgewählt`;
+    document.getElementById('rename-file-list').style.display = count > 0 ? 'block' : 'none';
+    document.getElementById('btn-rename').disabled = count === 0;
+    document.getElementById('btn-rename-clear').style.display = count > 0 ? 'flex' : 'none';
+    const preview = document.getElementById('rename-files-preview');
+    preview.innerHTML = '';
+    renameFiles.forEach(f => {
+      const el = document.createElement('div'); el.className = 'file-item';
+      el.innerHTML = `<span>📄</span><span class="file-item-name">${f.name}</span><span class="file-item-size">${(f.size/1024).toFixed(0)} KB</span>`;
+      preview.appendChild(el);
+    });
+  }
+  function clearRenameFiles() { renameFiles = []; document.getElementById('rename-file-input').value = ''; updateRenameUI(); }
+
+  async function renameAndDownload() {
+    if (!renameFiles.length) return;
+    const btn = document.getElementById('btn-rename');
+    setLoading(btn, true);
+    toast(`✏ Analysiere ${renameFiles.length} Datei(en)...`, 'info');
+    try {
+      const results = [];
+      for (const file of renameFiles) {
+        const fd = new FormData(); fd.append('file', file);
+        const r = await fetch(`${API}/analyze/invoice`, { method: 'POST', headers: { 'X-API-Key': apiKey }, body: fd });
+        const d = await r.json();
+        results.push({ file, suggested: d.suggested_filename || file.name });
+        appendLog(`✏ ${file.name} → ${d.suggested_filename || '?'}`);
       }
-    } catch (err) {
-      toast('Fehler: ' + err.message, 'error');
-    } finally {
-      setLoading(btn, false);
+      const zip = new JSZip();
+      for (const { file, suggested } of results) zip.file(suggested, file);
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'rechnungen_umbenannt.zip'; a.click();
+      URL.revokeObjectURL(url);
+      toast(`✓ ZIP mit ${results.length} Datei(en) heruntergeladen`, 'success');
+      clearRenameFiles();
+    } catch(e) { toast('Fehler: ' + e.message, 'error'); }
+    finally { setLoading(btn, false); }
+  }
+
+  function onAnalyzeDragOver(e) { e.preventDefault(); document.getElementById('analyze-drop-zone').classList.add('drag-over'); }
+  function onAnalyzeDragLeave() { document.getElementById('analyze-drop-zone').classList.remove('drag-over'); }
+  function onAnalyzeDrop(e) { e.preventDefault(); onAnalyzeDragLeave(); setAnalyzeFiles(e.dataTransfer.files); }
+  function onAnalyzeFilesSelected(e) { setAnalyzeFiles(e.target.files); }
+  function setAnalyzeFiles(files) {
+    analyzeFiles_ = Array.from(files);
+    document.getElementById('analyze-file-count').textContent = `${analyzeFiles_.length} Datei(en) ausgewählt`;
+    document.getElementById('btn-analyze').disabled = analyzeFiles_.length === 0;
+  }
+  async function analyzeFiles() {
+    if (!analyzeFiles_.length) return;
+    const btn = document.getElementById('btn-analyze');
+    setLoading(btn, true);
+    for (const file of analyzeFiles_) {
+      const fd = new FormData(); fd.append('file', file);
+      try {
+        const r = await fetch(`${API}/analyze/invoice`, { method: 'POST', headers: { 'X-API-Key': apiKey }, body: fd });
+        const d = await r.json();
+        appendLog(`🔍 ${file.name}`);
+        appendLog(`   Datum: ${d.invoice_date||'?'} | Lieferant: ${d.supplier||'?'} | Nr: ${d.invoice_number||'?'} | Betrag: ${d.amount||'?'}`);
+        appendLog(`   → ${d.suggested_filename||'?'}`);
+      } catch(e) { appendLog(`❌ ${file.name}: ${e.message}`); }
     }
+    toast(`✓ ${analyzeFiles_.length} Datei(en) analysiert`, 'success');
+    setLoading(btn, false);
   }
 
   // ── WEBSOCKET LOGS ────────────────────────────────────────
   let loggingEnabled = false;
-
-  function toggleLogging() {
-    if (loggingEnabled) disconnectWS();
-    else connectWS();
-  }
-
+  function toggleLogging() { if (loggingEnabled) disconnectWS(); else connectWS(); }
   function connectWS() {
     if (ws && ws.readyState < 2) return;
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     ws = new WebSocket(`${proto}://${location.host}/ws/logs?api_key=${encodeURIComponent(apiKey)}`);
     loggingEnabled = true;
     document.getElementById('log-toggle-btn').textContent = 'logging ✓';
-
-    ws.onopen = () => {
-      document.getElementById('ws-badge').textContent = 'connected';
-      document.getElementById('ws-badge').className = 'log-badge connected';
-      clearLogPlaceholder();
-    };
+    ws.onopen = () => { document.getElementById('ws-badge').textContent = 'connected'; document.getElementById('ws-badge').className = 'log-badge connected'; clearLogPlaceholder(); };
     ws.onmessage = (e) => appendLog(e.data);
-    ws.onclose = () => {
-      document.getElementById('ws-badge').textContent = loggingEnabled ? 'reconnecting...' : 'off';
-      document.getElementById('ws-badge').className = 'log-badge';
-      if (loggingEnabled) setTimeout(connectWS, 3000);
-    };
+    ws.onclose = () => { document.getElementById('ws-badge').textContent = loggingEnabled ? 'reconnecting...' : 'off'; document.getElementById('ws-badge').className = 'log-badge'; if (loggingEnabled) setTimeout(connectWS, 3000); };
     ws.onerror = () => ws.close();
   }
-
   function disconnectWS() {
     loggingEnabled = false;
     document.getElementById('log-toggle-btn').textContent = 'logging ✗';
@@ -1086,15 +787,12 @@
   }
 
   let logEmpty = true;
-  function clearLogPlaceholder() {
-    if (logEmpty) { document.getElementById('log-output').innerHTML = ''; logEmpty = false; }
-  }
+  function clearLogPlaceholder() { if (logEmpty) { document.getElementById('log-output').innerHTML = ''; logEmpty = false; } }
 
   function appendLog(line) {
-    // Verbose-Filter: INFO HTTP-Zeilen ausblenden wenn verbose=false
     if (!verbose && classifyLine(line) === 'http') return;
     clearLogPlaceholder();
-    const out  = document.getElementById('log-output');
+    const out = document.getElementById('log-output');
     const span = document.createElement('span');
     span.className = 'log-line ' + classifyLine(line);
     span.textContent = line;
@@ -1105,49 +803,32 @@
     if (autoscroll) out.scrollTop = out.scrollHeight;
   }
 
-  function toggleVerbose() {
-    verbose = !verbose;
-    document.getElementById('verbose-btn').textContent = 'verbose ' + (verbose ? '✓' : '✗');
-  }
-
   function classifyLine(line) {
     if (line.includes('⬆') || line.includes('Upload') || line.includes('hochgeladen')) return 'upload';
     if (line.includes('✅') || line.includes('gespeichert') || line.includes('abgeschlossen')) return 'success';
-    if (line.includes('❌') || line.includes('Error') || line.includes('error') || /\s500\s/.test(line) || line.includes(' 500 ') || line.includes('"500"')) return 'error';
-    if (line.includes('⚠️') || line.includes('Timeout') || line.includes('nicht gefunden')) return 'warn';
+    if (line.includes('❌') || line.includes('Error') || line.includes('error') || /\s500\s|"500"| 500 /.test(line)) return 'error';
+    if (line.includes('⚠️') || line.includes('SESSION_EXPIRED') || line.includes('Timeout') || line.includes('nicht gefunden')) return 'warn';
     if (line.includes('INFO:') && line.includes('HTTP')) return 'http';
     if (line.includes('🚀') || line.includes('📖') || line.includes('📅') || line.includes('📥')) return 'highlight';
     return 'info';
   }
 
   function clearLog() { document.getElementById('log-output').innerHTML = ''; logEmpty = false; }
+  function toggleAutoscroll() { autoscroll = !autoscroll; document.getElementById('autoscroll-btn').textContent = 'autoscroll ' + (autoscroll ? '✓' : '✗'); }
+  function toggleVerbose() { verbose = !verbose; document.getElementById('verbose-btn').textContent = 'verbose ' + (verbose ? '✓' : '✗'); document.getElementById('verbose-btn').classList.toggle('active', verbose); }
 
-  function toggleAutoscroll() {
-    autoscroll = !autoscroll;
-    document.getElementById('autoscroll-btn').textContent = 'autoscroll ' + (autoscroll ? '✓' : '✗');
-  }
-
-  // ── TOAST ─────────────────────────────────────────────────
+  // ── TOAST & LOADING ───────────────────────────────────────
   function toast(msg, type = 'info') {
-    const el = document.createElement('div');
-    el.className = `toast ${type}`;
-    el.textContent = msg;
+    const el = document.createElement('div'); el.className = `toast ${type}`; el.textContent = msg;
     document.getElementById('toast-container').appendChild(el);
     setTimeout(() => el.remove(), 4000);
   }
-
-  // ── LOADING STATE ─────────────────────────────────────────
-  function setLoading(btn, loading) {
-    btn.disabled = loading;
-    btn.classList.toggle('loading', loading);
-  }
+  function setLoading(btn, loading) { btn.disabled = loading; btn.classList.toggle('loading', loading); }
 
   // ── INIT ──────────────────────────────────────────────────
   function initApp() {
-    checkHealth();
-    setInterval(checkHealth, 15000);
-    fetchDebugStatus();
-    setInterval(fetchDebugStatus, 10000);
+    checkHealth(); setInterval(checkHealth, 15000);
+    fetchDebugStatus(); setInterval(fetchDebugStatus, 10000);
   }
 
   if (apiKey) {
@@ -1155,9 +836,7 @@
       if (ok) { initApp(); }
       else { sessionStorage.removeItem('invoice_pi_api_key'); apiKey = ''; showKeyDialog(); }
     });
-  } else {
-    showKeyDialog();
-  }
+  } else { showKeyDialog(); }
 </script>
 </body>
 </html>
