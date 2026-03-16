@@ -439,7 +439,7 @@
 <body>
 
 <header>
-  <div class="logo">invoice<span>-pi</span> · admin</div>
+  <div class="logo">invoice<span>-pi</span> · admin <span style="font-size:10px;color:var(--border);font-weight:400;">v1.1</span></div>
   <div class="status-pill">
     <div class="dot" id="health-dot"></div>
     <span id="health-text">checking...</span>
@@ -1113,7 +1113,7 @@
   function classifyLine(line) {
     if (line.includes('⬆') || line.includes('Upload') || line.includes('hochgeladen')) return 'upload';
     if (line.includes('✅') || line.includes('gespeichert') || line.includes('abgeschlossen')) return 'success';
-    if (line.includes('❌') || line.includes('Error') || line.includes('error') || line.includes('500')) return 'error';
+    if (line.includes('❌') || line.includes('Error') || line.includes('error') || /\s500\s/.test(line) || line.includes(' 500 ') || line.includes('"500"')) return 'error';
     if (line.includes('⚠️') || line.includes('Timeout') || line.includes('nicht gefunden')) return 'warn';
     if (line.includes('INFO:') && line.includes('HTTP')) return 'http';
     if (line.includes('🚀') || line.includes('📖') || line.includes('📅') || line.includes('📥')) return 'highlight';
