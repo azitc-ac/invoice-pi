@@ -84,6 +84,8 @@
   .btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); }
   .btn-ghost { background: transparent; color: var(--muted); border: 1px dashed var(--border); }
   .btn-ghost:hover { border-color: var(--muted); color: var(--text); }
+  .btn-blue      { background: var(--accent2)22; color: var(--accent2); border: 1px solid var(--accent2)44; }
+  .btn-blue:hover { background: var(--accent2)33; }
   .btn-danger    { background: var(--danger)22; color: var(--danger); border: 1px solid var(--danger)44; }
   .btn-danger:hover { background: var(--danger)33; }
   .btn:disabled  { opacity: 0.4; cursor: not-allowed; transform: none !important; }
@@ -201,7 +203,7 @@
             <input type="checkbox" id="session-save-check" checked>
             <label for="session-save-check">Session speichern</label>
           </div>
-          <button class="btn btn-secondary" id="btn-session" onclick="initSession()" disabled>
+          <button class="btn btn-primary" id="btn-session" onclick="initSession()" disabled>
             <span class="btn-icon">🔐</span>
             <div class="spinner"></div>
             Browser öffnen &amp; Login
@@ -240,7 +242,7 @@
         <div class="card">
           <div class="card-title">Browser-Locks aufräumen</div>
           <div class="card-hint">Wenn ein Download hängt oder "profile in use" Fehler auftritt.</div>
-          <button class="btn btn-secondary" id="btn-cleanup" onclick="cleanupLocks()">
+          <button class="btn btn-primary" id="btn-cleanup" onclick="cleanupLocks()">
             <span class="btn-icon">🧹</span>
             <div class="spinner"></div>
             Locks aufräumen
@@ -261,7 +263,7 @@
         <div class="card">
           <div class="card-title">Manueller Login (einmalig)</div>
           <div class="card-hint">Debug mode (VNC) muss aktiv sein.<br>Session wird gespeichert.</div>
-          <button class="btn btn-secondary" id="btn-lexware-session" onclick="initLexwareSession()" disabled>
+          <button class="btn btn-purple" id="btn-lexware-session" onclick="initLexwareSession()" disabled>
             <span class="btn-icon">🔐</span>
             <div class="spinner"></div>
             Lexware Login öffnen
@@ -305,15 +307,18 @@
         <div class="card">
           <div class="card-title">Gespeicherte Rechnungen</div>
           <div class="card-hint">Wähle eine lokal gespeicherte Rechnung aus.</div>
-          <button class="btn btn-secondary" id="btn-refresh-list" onclick="loadDownloadsList()" style="margin-bottom:10px;">
+          <button class="btn btn-purple" id="btn-refresh-list" onclick="loadDownloadsList()" style="margin-bottom:10px;">
             <span class="btn-icon">🔄</span><div class="spinner"></div>Liste aktualisieren
           </button>
           <div class="file-list" id="downloads-list">
             <div class="file-list-empty">Liste laden ↑</div>
           </div>
-          <div style="margin-top:10px">
+          <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
             <button class="btn btn-purple" id="btn-upload-path" onclick="uploadByPath()" disabled>
               <span class="btn-icon">⬆</span><div class="spinner"></div>Ausgewählte Datei hochladen
+            </button>
+            <button class="btn btn-secondary" id="btn-download-path" onclick="downloadSelectedFile()" disabled>
+              <span class="btn-icon">⬇</span><div class="spinner"></div>Ausgewählte Datei herunterladen
             </button>
           </div>
           <div style="margin-top:8px;font-size:11px;color:var(--muted);font-family:var(--mono);" id="selected-path-label"></div>
@@ -343,7 +348,7 @@
             <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:6px;" id="rename-file-count"></div>
             <div class="file-list" id="rename-files-preview" style="max-height:100px;"></div>
           </div>
-          <button class="btn btn-secondary" id="btn-rename" onclick="renameAndDownload()" disabled style="margin-top:10px;">
+          <button class="btn btn-blue" id="btn-rename" onclick="renameAndDownload()" disabled style="margin-top:10px;">
             <span class="btn-icon">✏</span><div class="spinner"></div>Umbenennen &amp; als ZIP laden
           </button>
           <button class="btn btn-danger" id="btn-rename-clear" onclick="clearRenameFiles()" style="margin-top:6px;display:none;">
@@ -365,7 +370,7 @@
             <div class="drop-sub">mehrere Dateien möglich</div>
           </div>
           <div id="analyze-file-count" style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:6px;"></div>
-          <button class="btn btn-secondary" id="btn-analyze" onclick="analyzeFiles()" disabled style="margin-top:10px;">
+          <button class="btn btn-blue" id="btn-analyze" onclick="analyzeFiles()" disabled style="margin-top:10px;">
             <span class="btn-icon">🔍</span><div class="spinner"></div>Analysieren
           </button>
         </div>
@@ -509,14 +514,43 @@
   document.getElementById('debug-toggle').addEventListener('change', async (e) => {
     const enable = e.target.checked;
     const endpoint = enable ? '/debug/enable' : '/debug/disable';
+    const toggleEl = document.getElementById('debug-toggle');
+    const label = document.getElementById('debug-header-label');
+    const headerDebug = toggleEl.closest('.header-debug');
+
+    // Disable toggle + show spinner
+    toggleEl.disabled = true;
+    const origLabel = label.textContent;
+    label.textContent = enable ? 'wird gestartet...' : 'wird beendet...';
+    headerDebug.style.borderColor = 'var(--warn)';
+
+    // Interval messages
+    const msg = enable ? '🖥️  Debug mode (VNC) wird gestartet...' : '🖥️  Debug mode (VNC) wird beendet...';
+    appendLog(msg);
+    const interval = setInterval(() => appendLog(msg), 2000);
+
     try {
       await fetch(`${API}${endpoint}`, { method: 'POST', headers: authHeaders() });
-      if (enable) appendLog('🖥️  Debug mode (VNC) wird gestartet...');
-      else appendLog('🖥️  Debug mode (VNC) wird beendet.');
-      fetchDebugStatus();
+      // Poll until state matches
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 1000));
+        try {
+          const r = await fetch(`${API}/debug/status`, { headers: authHeaders() });
+          const d = await r.json();
+          if (d.debug_enabled === enable) {
+            setDebugUI(d.debug_enabled, d.vnc_url);
+            break;
+          }
+        } catch {}
+      }
     } catch (err) {
       toast('Fehler: ' + err.message, 'error');
       e.target.checked = !enable;
+    } finally {
+      clearInterval(interval);
+      toggleEl.disabled = false;
+      label.textContent = 'Debug mode (VNC)';
+      headerDebug.style.borderColor = '';
     }
   });
 
@@ -662,7 +696,25 @@
     el.classList.add('selected');
     selectedDownloadPath = path;
     document.getElementById('btn-upload-path').disabled = false;
+    document.getElementById('btn-download-path').disabled = false;
     document.getElementById('selected-path-label').textContent = `→ ${name}`;
+  }
+
+  async function downloadSelectedFile() {
+    if (!selectedDownloadPath) { toast('Keine Datei ausgewählt', 'error'); return; }
+    const btn = document.getElementById('btn-download-path');
+    setLoading(btn, true);
+    try {
+      const r = await fetch(`${API}/downloads/file?path=${encodeURIComponent(selectedDownloadPath)}`, { headers: authHeaders() });
+      if (!r.ok) { toast('Fehler beim Herunterladen', 'error'); return; }
+      const blob = await r.blob();
+      const fname = selectedDownloadPath.split('/').pop();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = fname; a.click();
+      URL.revokeObjectURL(url);
+      toast(`✓ Heruntergeladen: ${fname}`, 'success');
+    } catch (err) { toast('Fehler: ' + err.message, 'error'); }
+    finally { setLoading(btn, false); }
   }
 
   async function uploadByPath() {
@@ -804,8 +856,8 @@
   }
 
   function classifyLine(line) {
-    if (line.includes('⬆') || line.includes('Upload') || line.includes('hochgeladen')) return 'upload';
     if (line.includes('✅') || line.includes('gespeichert') || line.includes('abgeschlossen')) return 'success';
+    if (line.includes('⬆') || line.includes('hochgeladen')) return 'upload';
     if (line.includes('❌') || line.includes('Error') || line.includes('error') || /\s500\s|"500"| 500 /.test(line)) return 'error';
     if (line.includes('⚠️') || line.includes('SESSION_EXPIRED') || line.includes('Timeout') || line.includes('nicht gefunden')) return 'warn';
     if (line.includes('INFO:') && line.includes('HTTP')) return 'http';
