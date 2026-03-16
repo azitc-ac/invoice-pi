@@ -163,7 +163,7 @@
 <body>
 
 <header>
-  <div class="logo">invoice<span>-pi</span> · admin <span class="logo-ver">v1.2</span></div>
+  <div class="logo">invoice<span>-pi</span> · admin <span class="logo-ver">v1.3</span></div>
   <div class="header-debug">
     <label class="toggle-switch" style="width:36px;height:20px;">
       <input type="checkbox" id="debug-toggle">
@@ -479,8 +479,9 @@
   }
 
   let _lastDebugState = null;
+  let _debugToggling = false;
   function setDebugUI(enabled, url) {
-    if (_lastDebugState !== null && _lastDebugState !== enabled) {
+    if (!_debugToggling && _lastDebugState !== null && _lastDebugState !== enabled) {
       appendLog(enabled ? '🖥️  Debug mode (VNC) aktiv' : '🖥️  Debug mode (VNC) beendet');
     }
     _lastDebugState = enabled;
@@ -519,15 +520,17 @@
     const headerDebug = toggleEl.closest('.header-debug');
 
     // Disable toggle + show spinner
+    _debugToggling = true;
     toggleEl.disabled = true;
     const origLabel = label.textContent;
     label.textContent = enable ? 'wird gestartet...' : 'wird beendet...';
     headerDebug.style.borderColor = 'var(--warn)';
 
-    // Interval messages every 3s
+    // Interval messages every 5s — stopped as soon as state confirmed
+    let intervalDone = false;
     const msg = enable ? '🖥️  Debug mode (VNC) wird gestartet...' : '🖥️  Debug mode (VNC) wird beendet...';
     appendLog(msg);
-    const interval = setInterval(() => appendLog(msg), 3000);
+    const interval = setInterval(() => { if (!intervalDone) appendLog(msg); }, 5000);
 
     try {
       await fetch(`${API}${endpoint}`, { method: 'POST', headers: authHeaders() });
@@ -538,7 +541,8 @@
           const r = await fetch(`${API}/debug/status`, { headers: authHeaders() });
           const d = await r.json();
           if (d.debug_enabled === enable) {
-            clearInterval(interval);  // stop BEFORE setDebugUI logs "aktiv"
+            intervalDone = true;
+            clearInterval(interval);
             setDebugUI(d.debug_enabled, d.vnc_url);
             break;
           }
@@ -548,7 +552,9 @@
       toast('Fehler: ' + err.message, 'error');
       e.target.checked = !enable;
     } finally {
+      intervalDone = true;
       clearInterval(interval);
+      _debugToggling = false;
       toggleEl.disabled = false;
       label.textContent = 'Debug mode (VNC)';
       headerDebug.style.borderColor = '';
