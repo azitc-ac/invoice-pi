@@ -508,7 +508,7 @@
 
   document.getElementById('debug-toggle').addEventListener('change', async (e) => {
     const enable = e.target.checked;
-    const endpoint = enable ? '/debug/start' : '/debug/stop';
+    const endpoint = enable ? '/debug/enable' : '/debug/disable';
     try {
       await fetch(`${API}${endpoint}`, { method: 'POST', headers: authHeaders() });
       if (enable) appendLog('🖥️  Debug mode (VNC) wird gestartet...');
