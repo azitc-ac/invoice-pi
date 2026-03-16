@@ -84,8 +84,8 @@
   .btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); }
   .btn-ghost { background: transparent; color: var(--muted); border: 1px dashed var(--border); }
   .btn-ghost:hover { border-color: var(--muted); color: var(--text); }
-  .btn-blue      { background: var(--accent2)22; color: var(--accent2); border: 1px solid var(--accent2)44; }
-  .btn-blue:hover { background: var(--accent2)33; }
+  .btn-blue      { background: var(--accent2); color: #fff; }
+  .btn-blue:hover { background: #3aadff; transform: translateY(-1px); }
   .btn-danger    { background: var(--danger)22; color: var(--danger); border: 1px solid var(--danger)44; }
   .btn-danger:hover { background: var(--danger)33; }
   .btn:disabled  { opacity: 0.4; cursor: not-allowed; transform: none !important; }
@@ -317,7 +317,7 @@
             <button class="btn btn-purple" id="btn-upload-path" onclick="uploadByPath()" disabled>
               <span class="btn-icon">⬆</span><div class="spinner"></div>Ausgewählte Datei hochladen
             </button>
-            <button class="btn btn-secondary" id="btn-download-path" onclick="downloadSelectedFile()" disabled>
+            <button class="btn btn-purple" id="btn-download-path" onclick="downloadSelectedFile()" disabled>
               <span class="btn-icon">⬇</span><div class="spinner"></div>Ausgewählte Datei herunterladen
             </button>
           </div>
@@ -524,20 +524,21 @@
     label.textContent = enable ? 'wird gestartet...' : 'wird beendet...';
     headerDebug.style.borderColor = 'var(--warn)';
 
-    // Interval messages
+    // Interval messages every 3s
     const msg = enable ? '🖥️  Debug mode (VNC) wird gestartet...' : '🖥️  Debug mode (VNC) wird beendet...';
     appendLog(msg);
-    const interval = setInterval(() => appendLog(msg), 2000);
+    const interval = setInterval(() => appendLog(msg), 3000);
 
     try {
       await fetch(`${API}${endpoint}`, { method: 'POST', headers: authHeaders() });
       // Poll until state matches
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 30; i++) {
         await new Promise(r => setTimeout(r, 1000));
         try {
           const r = await fetch(`${API}/debug/status`, { headers: authHeaders() });
           const d = await r.json();
           if (d.debug_enabled === enable) {
+            clearInterval(interval);  // stop BEFORE setDebugUI logs "aktiv"
             setDebugUI(d.debug_enabled, d.vnc_url);
             break;
           }
