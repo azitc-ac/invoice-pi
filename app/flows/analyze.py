@@ -6,6 +6,23 @@ from pathlib import Path
 
 # ── Datum-Normalisierung ──────────────────────────────────────────────────────
 
+def _ocr_text(pdf_path: str) -> str:
+    """OCR-Fallback für gescannte PDFs ohne extrahierbaren Text."""
+    try:
+        from pdf2image import convert_from_path
+        import pytesseract
+        images = convert_from_path(pdf_path, dpi=200)
+        parts = []
+        for img in images[:3]:  # max 3 Seiten
+            text = pytesseract.image_to_string(img, lang="deu+eng")
+            if text.strip():
+                parts.append(text)
+        return "\n".join(parts)
+    except Exception as e:
+        print(f"⚠️  OCR Fehler: {e}")
+        return ""
+
+
 def _fix_microsoft_date(date_str: str) -> str:
     """Korrigiert Microsoft YYYY-DD-MM Datumsformat (z.B. 2026-06-02 = 2. Juni -> 2026-02-06)."""
     m = re.match(r"(\d{4})-(\d{2})-(\d{2})", date_str)
@@ -163,7 +180,7 @@ def _deduplicate_chars(text: str) -> str:
 
 
 def _extract_text(pdf_path: str) -> str:
-    """Extrahiert Text aus allen Seiten eines PDFs."""
+    """Extrahiert Text aus allen Seiten eines PDFs. OCR-Fallback wenn nötig."""
     text_parts = []
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
@@ -171,7 +188,19 @@ def _extract_text(pdf_path: str) -> str:
             if t:
                 text_parts.append(t)
     text = "\n".join(text_parts)
-    return _deduplicate_chars(text)
+    text = _deduplicate_chars(text)
+
+    # OCR-Fallback: wenn weniger als 50 Zeichen extrahiert wurden
+    if len(text.strip()) < 50:
+        print("🔍 Wenig Text gefunden — versuche OCR...")
+        ocr = _ocr_text(pdf_path)
+        if len(ocr.strip()) > len(text.strip()):
+            print(f"✅ OCR erfolgreich: {len(ocr)} Zeichen")
+            text = _deduplicate_chars(ocr)
+        else:
+            print("⚠️  OCR lieferte auch wenig Text")
+
+    return text
 
 
 def _find_date(text: str) -> str | None:
@@ -301,6 +330,7 @@ def analyze_invoice(pdf_path: str) -> dict:
     number_part  = _safe_part(invoice_number) if invoice_number else "NR-UNBEKANNT"
     suggested_filename = f"{date_part}_{supplier_part}_{number_part}.pdf"
 
+    ocr_used = len(text.strip()) >= 50 and "pytesseract" in str(type(text))  # simple flag
     return {
         "invoice_date":        invoice_date,
         "supplier":            supplier,
