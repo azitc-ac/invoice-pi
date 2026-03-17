@@ -127,7 +127,8 @@ AMOUNT_PATTERNS = [
     # Microsoft Gebühren
     (r"Gebühren:\s*([\d.,]+)", 1),
     # Allgemein
-    (r"Gesamtbetrag\s+([\d.,]+\s*(?:EUR|€))", 1),
+    (r"Gesamtbetrag\s+([\d.,]+\s*(?:EUR|Euro|€))", 1),
+    (r"([\d.,]+)\s*Euro(?!\w)", 1),
     (r"Brutto[:\s]+([\d.,]+\s*(?:EUR|€))", 1),
     (r"Summe[:\s]+([\d.,]+\s*(?:EUR|€))", 1),
     (r"Total[:\s]+([\d.,]+\s*(?:EUR|€))", 1),
@@ -205,9 +206,10 @@ def _extract_text(pdf_path: str) -> str:
 
 def _find_date(text: str) -> str | None:
     # Zeilenumbrueche zwischen zusammengehoerenden Feldern zusammenfuehren
-    # z.B. "Rechnungsdatum" + newline + "/Lieferdatum 22 September 2021"
     normalized_text = text.replace("\n/", "/")
     normalized_text = re.sub(r"(\w)\n(\d)", r"\1 \2", normalized_text)
+    # Leerzeichen um Trennzeichen in Datumsangaben entfernen: "2026 -03- 09" → "2026-03-09"
+    normalized_text = re.sub(r"(\d)\s*[-–]\s*(\d{2})\s*[-–]\s*(\d{2})", r"\1-\2-\3", normalized_text)
 
     for pattern in DATE_PATTERNS:
         m = re.search(pattern, normalized_text, re.IGNORECASE)
@@ -277,10 +279,10 @@ def _find_supplier(text: str, filename: str = "") -> str | None:
     for pattern, name in SUPPLIER_PATTERNS:
         if re.search(pattern, combined, re.IGNORECASE):
             return name
-    # Fallback: erste Zeile des PDFs oft der Firmenname
-    first_lines = text.strip().splitlines()[:5]
+    # Fallback: erste nicht-leere Zeile ohne führende Sonderzeichen
+    first_lines = text.strip().splitlines()[:10]
     for line in first_lines:
-        line = line.strip()
+        line = re.sub(r"^[^\w]+", "", line).strip()  # führende Sonderzeichen entfernen
         if len(line) > 3 and len(line) < 60 and not re.match(r"^\d", line):
             return line
     return None
