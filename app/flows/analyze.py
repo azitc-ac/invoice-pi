@@ -100,6 +100,7 @@ DATE_FALLBACK_PATTERNS = [
 INVOICE_NR_PATTERNS = [
     r"Rechnungsnummer[:\s#]+([A-Z0-9\-\/]{4,30})",
     r"Rechnungs-?Nr\.?[:\s#]+([A-Z0-9\-\/]{4,30})",
+    r"Rechnung-?Nr\.?[:\s#]+([A-Z0-9][A-Z0-9\-\/ ]{2,28}[A-Z0-9])",
     r"Rechnung-?Nr\.?[:\s#]+([A-Z0-9\-\/]{4,30})",
     r"Invoice\s*(?:No|Number|Nr)\.?[:\s#]+([A-Z0-9\-\/]{4,30})",
     r"Beleg(?:nummer)?[:\s#]+([A-Z0-9\-\/]{4,30})",
