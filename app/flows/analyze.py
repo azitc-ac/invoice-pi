@@ -45,6 +45,7 @@ def _normalize_date(raw: str) -> str | None:
         "%d.%m.%Y", "%d.%m.%y",
         "%d/%m/%Y", "%d/%m/%y",
         "%Y-%m-%d",
+        "%Y/%m/%d",
         "%d. %B %Y", "%d. %b %Y",
         "%d %B %Y", "%d %b %Y",
         "%B %d, %Y", "%b %d, %Y",
@@ -80,6 +81,7 @@ def _normalize_date(raw: str) -> str | None:
 DATE_PATTERNS = [
     r"Belegdatum[:\s]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
     r"Rechnungsdatum[:\s]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
+    r"Rechnungsdatum[:\s]+(\d{4}[/\-.]\d{2}[/\-.]\d{2})",
     r"Datum[:\s]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
     r"Invoice Date[:\s]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
     r"Date[:\s]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
@@ -132,6 +134,9 @@ AMOUNT_PATTERNS = [
     (r"Brutto[:\s]+([\d.,]+\s*(?:EUR|€))", 1),
     (r"Summe[:\s]+([\d.,]+\s*(?:EUR|€))", 1),
     (r"Total[:\s]+([\d.,]+\s*(?:EUR|€))", 1),
+    (r"Rechnungsbetrag[:\s]+([\d.,]+\s*(?:EUR|€|Euro))", 1),
+    (r"Gesamtbetrag inkl[^\n]*?([\d.,]+\s*(?:EUR|€))", 1),
+    (r"([\d.,]+)\s*EUR(?!\w)(?![\d])", 1),
 ]
 
 # Bekannte Lieferanten — Reihenfolge wichtig (spezifischer zuerst)
