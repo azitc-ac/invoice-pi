@@ -136,6 +136,7 @@ AMOUNT_PATTERNS = [
     # Microsoft Gebühren
     (r"Gebühren:\s*([\d.,]+)", 1),
     # Allgemein
+    (r"Gesamtbetrag\s*\(EUR\)\s*([\d.,]+)", 1),          # Tesla: Gesamtbetrag (EUR) 250.00
     (r"Gesamtbetrag\s+([\d.,]+\s*(?:EUR|Euro|€))", 1),
     (r"([\d.,]+)\s*Euro(?!\w)", 1),
     (r"Brutto[:\s]+([\d.,]+\s*(?:EUR|€))", 1),
@@ -346,14 +347,6 @@ def analyze_invoice(pdf_path: str) -> dict:
     suggested_filename = f"{date_part}_{supplier_part}_{number_part}.pdf"
 
     ocr_used = len(text.strip()) >= 50 and "pytesseract" in str(type(text))  # simple flag
-    # Debug: 300 Zeichen rund um "TOTAL" / "Gesamt" für Amount-Diagnose
-    amount_context = None
-    for kw in ["TOTAL", "Total", "Gesamt", "Summe", "Betrag"]:
-        idx = text.find(kw)
-        if idx != -1:
-            amount_context = text[max(0, idx - 50):idx + 250]
-            break
-
     return {
         "invoice_date":        invoice_date,
         "supplier":            supplier,
@@ -361,7 +354,6 @@ def analyze_invoice(pdf_path: str) -> dict:
         "amount":              amount,
         "suggested_filename":  suggested_filename,
         "raw_text_preview":    text[:500] if text else None,
-        "amount_context":      amount_context,   # ← DEBUG: entfernen sobald Amount-Pattern passt
     }
 
 
