@@ -46,6 +46,8 @@ def _normalize_date(raw: str) -> str | None:
         "%d/%m/%Y", "%d/%m/%y",
         "%Y-%m-%d",
         "%Y/%m/%d",
+        "%d-%b-%Y", "%d-%b-%y",   # Tesla: 24-Feb-2026
+        "%d-%B-%Y", "%d-%B-%y",   # Tesla: 24-February-2026
         "%d. %B %Y", "%d. %b %Y",
         "%d %B %Y", "%d %b %Y",
         "%B %d, %Y", "%b %d, %Y",
@@ -82,6 +84,7 @@ DATE_PATTERNS = [
     r"Belegdatum[:\s]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
     r"Rechnungsdatum[:\s]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
     r"Rechnungsdatum[:\s]+(\d{4}[/\-.]\d{2}[/\-.]\d{2})",
+    r"Rechnungsdatum[:\s]+(\d{1,2}-[A-Za-z]{3,9}-\d{4})",  # Tesla: 24-Feb-2026
     r"Datum[:\s]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
     r"Invoice Date[:\s]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
     r"Date[:\s]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
@@ -118,6 +121,10 @@ INVOICE_NR_PATTERNS = [
 ]
 
 AMOUNT_PATTERNS = [
+    # Tesla: "TOTAL\n1.234,56" oder "Total EUR 1.234,56" am Ende der Tabelle
+    (r"(?:^|\n)TOTAL\s*\n\s*([\d.,]+)", 1),
+    (r"Total\s+EUR\s+([\d.,]+)", 1),
+    (r"Gesamtbetrag\s+EUR\s+([\d.,]+)", 1),
     # Microsoft Gesamtsumme
     (r"Gesamtsumme\s+EUR\s+([\d.,]+)", 1),
     # Amazon
@@ -339,6 +346,14 @@ def analyze_invoice(pdf_path: str) -> dict:
     suggested_filename = f"{date_part}_{supplier_part}_{number_part}.pdf"
 
     ocr_used = len(text.strip()) >= 50 and "pytesseract" in str(type(text))  # simple flag
+    # Debug: 300 Zeichen rund um "TOTAL" / "Gesamt" für Amount-Diagnose
+    amount_context = None
+    for kw in ["TOTAL", "Total", "Gesamt", "Summe", "Betrag"]:
+        idx = text.find(kw)
+        if idx != -1:
+            amount_context = text[max(0, idx - 50):idx + 250]
+            break
+
     return {
         "invoice_date":        invoice_date,
         "supplier":            supplier,
@@ -346,6 +361,7 @@ def analyze_invoice(pdf_path: str) -> dict:
         "amount":              amount,
         "suggested_filename":  suggested_filename,
         "raw_text_preview":    text[:500] if text else None,
+        "amount_context":      amount_context,   # ← DEBUG: entfernen sobald Amount-Pattern passt
     }
 
 
