@@ -5,6 +5,7 @@ from typing import List, Optional
 from flows.freenet import run_freenet_download
 from flows.netaachen import run_netaachen_download
 from flows.lexware import run_lexware_upload
+from flows.analyze import analyze_invoice
 import os
 import subprocess
 import time
@@ -62,6 +63,7 @@ async def api_key_middleware(request: Request, call_next):
 class DownloadRequest(BaseModel):
     site: str
     month_offset: int = 0
+    save_session: bool = True
 
 
 # ============================================================
@@ -163,10 +165,20 @@ def get_vnc_url(request: Request) -> str:
 def download(req: DownloadRequest):
     site = req.site.strip().lower()
     if site == "freenet":
-        files = run_freenet_download(headless=is_headless(), month_offset=req.month_offset)
+        try:
+            files = run_freenet_download(headless=is_headless(), month_offset=req.month_offset)
+        except RuntimeError as e:
+            if "SESSION_EXPIRED" in str(e):
+                print(f"⚠️  SESSION_EXPIRED: Freenet — {e}")
+            raise
         return {"status": "ok", "site": "freenet", "files": files}
     elif site == "netaachen":
-        files = run_netaachen_download(headless=is_headless(), month_offset=req.month_offset)
+        try:
+            files = run_netaachen_download(headless=is_headless(), month_offset=req.month_offset)
+        except RuntimeError as e:
+            if "SESSION_EXPIRED" in str(e):
+                print(f"⚠️  SESSION_EXPIRED: NetAachen — {e}")
+            raise
         return {"status": "ok", "site": "netaachen", "files": files}
     else:
         raise HTTPException(status_code=400, detail="Unsupported site")
@@ -175,9 +187,19 @@ def download(req: DownloadRequest):
 def download_file(req: DownloadRequest):
     site = req.site.strip().lower()
     if site == "freenet":
-        files: List[str] = run_freenet_download(headless=is_headless())
+        try:
+            files = run_freenet_download(headless=is_headless())
+        except RuntimeError as e:
+            if "SESSION_EXPIRED" in str(e):
+                print(f"⚠️  SESSION_EXPIRED: Freenet — {e}")
+            raise
     elif site == "netaachen":
-        files: List[str] = run_netaachen_download(headless=is_headless())
+        try:
+            files = run_netaachen_download(headless=is_headless())
+        except RuntimeError as e:
+            if "SESSION_EXPIRED" in str(e):
+                print(f"⚠️  SESSION_EXPIRED: NetAachen — {e}")
+            raise
     else:
         raise HTTPException(status_code=400, detail="Unsupported site")
 
@@ -338,8 +360,15 @@ ANTI_DETECTION_SCRIPT = """
     );
 """
 
-def _open_browser_for_login(site: str):
-    from playwright.sync_api import sync_playwright
+def _open_browser_for_login(site: str, save_session: bool = True):
+    """
+    Öffnet Chromium via CDP (navigator.webdriver=false) für Session-Login.
+    Freenet/NetAachen: Credentials vorausgefüllt, manuell Anmelden klicken.
+    Lexware: manuell einloggen.
+    Profil wird in userdata-Verzeichnis gespeichert.
+    """
+    import subprocess as _sp
+    from playwright.sync_api import sync_playwright as _pw
 
     configs = {
         "freenet": {
@@ -349,7 +378,7 @@ def _open_browser_for_login(site: str):
             "password": os.getenv("FREENET_PASSWORD", ""),
             "fill_username": "input#username",
             "fill_password": "input#password",
-            "anti_detection": False,
+            "login_done": lambda url: "login" not in url.lower() and "freenet" in url.lower(),
         },
         "netaachen": {
             "url": "https://sso.netcologne.de/cas/login?service=https://meinekundenwelt.netcologne.de/&mandant=na",
@@ -358,176 +387,242 @@ def _open_browser_for_login(site: str):
             "password": os.getenv("NETAACHEN_PASSWORD", ""),
             "fill_username": "input#username",
             "fill_password": "input#password",
-            "anti_detection": False,
+            "login_done": lambda url: "meinekundenwelt" in url.lower() and "cas/login" not in url.lower(),
         },
         "lexware": {
             "url": "https://app.lexware.de",
             "userdata": os.getenv("PW_USERDATA_LEXWARE", "/pwdata/lexware"),
             "username": os.getenv("LEXWARE_USERNAME", ""),
             "password": os.getenv("LEXWARE_PASSWORD", ""),
-            "fill_username": "input[type='email']",
-            "fill_password": "input[type='password']",
-            "anti_detection": True,  # Lexware erkennt Bots — Anti-Detection aktiv
+            "fill_username": None,
+            "fill_password": None,
+            "login_done": lambda url: "dashboard" in url.lower(),
         },
     }
 
     cfg = configs[site]
+    cdp_port = 9224
+    profile_dir = cfg["userdata"] + "-session-tmp"
 
-    with sync_playwright() as p:
-        if cfg["anti_detection"]:
-            # Firefox: keine Chromium-spezifischen Args
-            context_kwargs = dict(
-                user_data_dir=cfg["userdata"],
-                headless=False,
-                args=[],
-                user_agent=(
-                    "Mozilla/5.0 (X11; Linux x86_64; rv:121.0) "
-                    "Gecko/20100101 Firefox/121.0"
-                ),
-                viewport={"width": 1280, "height": 900},
-                locale="de-DE",
-                timezone_id="Europe/Berlin",
-            )
-        else:
-            # Chromium für Freenet / NetAachen
-            context_kwargs = dict(
-                user_data_dir=cfg["userdata"],
-                headless=False,
-                args=[
-                    "--no-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-setuid-sandbox",
-                ],
-            )
+    # Chromium starten mit CDP
+    _sp.run(f"pkill -f 'remote-debugging-port={cdp_port}' 2>/dev/null", shell=True)
+    time.sleep(1)
 
-        # Lexware: Firefox nutzen (umgeht AWS WAF Bot-Erkennung die Chromium blockiert)
-        browser_type = p.firefox if cfg["anti_detection"] else p.chromium
-        context = browser_type.launch_persistent_context(**context_kwargs)
+    import shutil as _shutil
+    if os.path.exists(profile_dir):
+        _shutil.rmtree(profile_dir)
 
-        if cfg["anti_detection"]:
-            context.add_init_script(ANTI_DETECTION_SCRIPT)
+    download_dir = os.getenv("DOWNLOAD_DIR", "/downloads")
 
-        page = context.new_page()
-        print(f"📖 Öffne Login-Seite für {site}: {cfg['url']}")
-        page.goto(cfg["url"], wait_until="domcontentloaded")
-        time.sleep(2)
+    # Download-Ordner in Chrome-Preferences setzen BEVOR Chromium startet
+    import json as _json_dl
+    prefs_dir = os.path.join(profile_dir, "Default")
+    os.makedirs(prefs_dir, exist_ok=True)
+    prefs_path = os.path.join(prefs_dir, "Preferences")
+    prefs = {}
+    if os.path.exists(prefs_path):
+        try: prefs = _json_dl.loads(open(prefs_path).read())
+        except Exception: prefs = {}
+    prefs.setdefault("download", {}).update({
+        "default_directory": download_dir,
+        "prompt_for_download": False,
+        "directory_upgrade": True,
+    })
+    prefs.setdefault("savefile", {})["default_directory"] = download_dir
+    open(prefs_path, "w").write(_json_dl.dumps(prefs))
+    print(f"📂 Download-Ordner gesetzt: {download_dir}")
 
-        if not cfg["anti_detection"]:
-            # Freenet / NetAachen: automatisch vorausfüllen
+    print(f"🌐 Starte Chromium für {site} Session-Login...")
+    proc = _sp.Popen([
+        "/ms-playwright/chromium-1208/chrome-linux/chrome",
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-blink-features=AutomationControlled",
+        f"--remote-debugging-port={cdp_port}",
+        f"--user-data-dir={profile_dir}",
+        "--window-size=1280,900",
+        cfg["url"],
+    ], stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+
+    time.sleep(4)
+
+    try:
+        with _pw() as p:
+            browser = p.chromium.connect_over_cdp(f"http://localhost:{cdp_port}")
+            ctx = browser.contexts[0]
+            page = ctx.pages[0] if ctx.pages else ctx.new_page()
+            page.bring_to_front()
+
+            # Download-Ordner auf /downloads setzen
             try:
-                if cfg["username"]:
-                    page.fill(cfg["fill_username"], cfg["username"])
-                if cfg["password"]:
-                    page.fill(cfg["fill_password"], cfg["password"])
-                print(f"✅ Credentials vorausgefüllt für {site} — warte auf manuellen Login...")
-            except Exception as e:
-                print(f"⚠️  Konnte Credentials nicht einfüllen: {e}")
-            time.sleep(300)
-            print(f"⏰ Timeout, Browser wird geschlossen.")
-            context.close()
-        else:
-            # Lexware: Credentials per Clipboard-Paste einfügen (umgeht Event-Detection)
-            # dann warten bis User eingeloggt ist, dann Storage State explizit speichern
-            u  = cfg["username"] or ""
-            pw = cfg["password"] or ""
-            print(f"🔐 Fülle Credentials per Clipboard ein...")
-
+                ctx.pages[0]._impl_obj._channel.send("Browser.setDownloadBehavior", {
+                    "behavior": "allow",
+                    "downloadPath": download_dir,
+                    "eventsEnabled": True,
+                }) if False else None  # CDP-Methode via Playwright context
+                await_result = browser._impl_obj._channel.send if False else None
+            except Exception:
+                pass
+            # Playwright-native Methode
             try:
-                # Email per JS Clipboard + Paste-Event einfügen
-                email_selectors = [
-                    "input[type=\'email\']",
-                    "input[name=\'email\']",
-                    "input[placeholder*=\'Mail\']",
-                    "input[placeholder*=\'mail\']",
-                ]
-                for sel in email_selectors:
-                    try:
-                        el = page.locator(sel).first
-                        if el.count() > 0 and el.is_visible():
-                            el.click()
-                            time.sleep(0.3)
-                            # Clipboard setzen und Paste-Event auslösen
-                            page.evaluate(f"""
-                                const el = document.querySelector(\'{sel}\');
-                                if (el) {{
-                                    el.focus();
-                                    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-                                        window.HTMLInputElement.prototype, \'value\'
-                                    ).set;
-                                    nativeInputValueSetter.call(el, \'{u}\');
-                                    el.dispatchEvent(new Event(\'input\', {{ bubbles: true }}));
-                                    el.dispatchEvent(new Event(\'change\', {{ bubbles: true }}));
-                                }}
-                            """)
-                            print(f"✅ Email gesetzt via React-Event")
-                            break
-                    except Exception:
-                        continue
+                for pg in ctx.pages:
+                    pg.context.set_default_timeout(0)
+            except Exception:
+                pass
+            # Chromium Preferences: Download-Pfad setzen
+            import json as _json2
+            prefs_path = os.path.join(profile_dir, "Default", "Preferences")
+            os.makedirs(os.path.dirname(prefs_path), exist_ok=True)
+            try:
+                prefs = _json2.loads(open(prefs_path).read()) if os.path.exists(prefs_path) else {}
+            except Exception:
+                prefs = {}
+            prefs.setdefault("download", {})["default_directory"] = download_dir
+            prefs["download"]["prompt_for_download"] = False
+            open(prefs_path, "w").write(_json2.dumps(prefs))
+            print(f"📂 Download-Ordner: {download_dir}")
 
-                time.sleep(0.5)
+            time.sleep(3)
+            print(f"🔍 navigator.webdriver: {page.evaluate('navigator.webdriver')}")
+            print(f"📍 URL: {page.url}")
 
-                # Passwort gleicher Ansatz
+            # Cookie-Banner wegklicken
+            js_cookie = """
+function findAndClick(root) {
+    var kw = ['alle akzept','akzept','zustimm','accept all','accept'];
+    var tags = ['button','a','[role="button"]'];
+    for (var ti=0;ti<tags.length;ti++){
+        var els=root.querySelectorAll(tags[ti]);
+        for (var i=0;i<els.length;i++){
+            var txt=(els[i].innerText||els[i].textContent||'').toLowerCase().trim();
+            for (var ki=0;ki<kw.length;ki++){if(txt.indexOf(kw[ki])!==-1){els[i].click();return true;}}
+        }
+    }
+    return false;
+}
+return findAndClick(document);
+"""
+            deadline = time.time() + 8
+            while time.time() < deadline:
                 try:
-                    pwd_el = page.locator("input[type=\'password\']").first
-                    if pwd_el.count() > 0 and pwd_el.is_visible():
-                        pwd_el.click()
-                        time.sleep(0.3)
-                        page.evaluate(f"""
-                            const el = document.querySelector(\'input[type=\"password\"\');
-                            if (el) {{
-                                el.focus();
-                                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-                                    window.HTMLInputElement.prototype, \'value\'
-                                ).set;
-                                nativeInputValueSetter.call(el, \'{pw}\');
-                                el.dispatchEvent(new Event(\'input\', {{ bubbles: true }}));
-                                el.dispatchEvent(new Event(\'change\', {{ bubbles: true }}));
-                            }}
-                        """)
-                        print(f"✅ Passwort gesetzt via React-Event")
+                    if page.evaluate(js_cookie):
+                        print("✅ Cookie-Banner geschlossen")
+                        time.sleep(0.6)
+                        break
+                except Exception:
+                    pass
+                time.sleep(0.3)
+
+            # Credentials vorausfüllen
+            if cfg["fill_username"] and cfg["username"]:
+                try:
+                    page.wait_for_selector(cfg["fill_username"], timeout=10000)
+                    page.fill(cfg["fill_username"], cfg["username"])
+                    print(f"✅ Username vorausgefüllt")
                 except Exception as e:
-                    print(f"⚠️  Passwort-Feld: {e}")
+                    print(f"⚠️  Username: {e}")
 
-                print(f"")
-                print(f"👉 Bitte jetzt auf \'Anmelden\' klicken!")
-                print(f"   Warte bis eingeloggt, dann wird Session gespeichert...")
+            if cfg["fill_password"] and cfg["password"]:
+                try:
+                    page.fill(cfg["fill_password"], cfg["password"])
+                    print(f"✅ Passwort vorausgefüllt")
+                except Exception as e:
+                    print(f"⚠️  Passwort: {e}")
 
-            except Exception as e:
-                print(f"⚠️  Clipboard-Methode fehlgeschlagen: {e}")
-                print(f"👉 Bitte manuell einloggen (User: {u})")
+            # Download-Events loggen
+            def _on_download(dl):
+                print(f"📥 Download gestartet: {dl.suggested_filename}")
+                try:
+                    dl.save_as(os.path.join(download_dir, dl.suggested_filename))
+                    print(f"✅ Download gespeichert: {download_dir}/{dl.suggested_filename}")
+                except Exception as e:
+                    print(f"⚠️  Download-Fehler: {e}")
+            page.on("download", _on_download)
 
-            # Warten bis User eingeloggt ist — prüfe URL alle 5s
-            print(f"⏳ Warte auf erfolgreichen Login (max 10 Minuten)...")
-            deadline = time.time() + 600
+            # Download-Events loggen
+            def _on_download(dl):
+                print(f"📥 Download gestartet: {dl.suggested_filename}")
+                try:
+                    dl.save_as(os.path.join(download_dir, dl.suggested_filename))
+                    print(f"✅ Download gespeichert: {download_dir}/{dl.suggested_filename}")
+                except Exception as e:
+                    print(f"⚠️  Download-Fehler: {e}")
+            page.on("download", _on_download)
+
+            if cfg["fill_username"]:
+                print(f"👉 Bitte jetzt auf Anmelden klicken!")
+            else:
+                print(f"👉 Bitte manuell einloggen (User: {cfg['username']})")
+
+            timeout_sec = 3600 if not save_session else 600
+            print(f"⏳ Warte auf Login (max {'60' if not save_session else '10'} Minuten)...")
+
+            # Warten bis eingeloggt
+            deadline = time.time() + timeout_sec
             logged_in = False
             while time.time() < deadline:
                 try:
-                    current_url = page.url
-                    # Eingeloggt wenn URL nicht mehr auf Login-Seite zeigt
-                    if "login" not in current_url.lower() and "signin" not in current_url.lower() and "app.lexware.de" in current_url:
+                    url = page.evaluate("window.location.href")
+                    if cfg["login_done"](url):
                         logged_in = True
-                        print(f"✅ Login erkannt! URL: {current_url}")
+                        print(f"✅ Login erkannt! URL: {url}")
                         break
                 except Exception:
                     pass
                 time.sleep(5)
 
             if logged_in:
-                # Explizit Storage State speichern — sichert Cookies auch für httpOnly Session-Cookies
-                storage_path = os.path.join(cfg["userdata"], "playwright-storage.json")
-                try:
-                    context.storage_state(path=storage_path)
-                    print(f"✅ Storage State gespeichert: {storage_path}")
-                except Exception as e:
-                    print(f"⚠️  Storage State Fehler: {e}")
-                # Noch 30s eingeloggt bleiben damit alle Cookies flushen
-                print(f"⏳ Warte 30s damit alle Cookies gespeichert werden...")
-                time.sleep(30)
+                if save_session:
+                    print(f"⏳ Warte 15s damit Cookies gespeichert werden...")
+                    time.sleep(15)
+                    storage_path = os.path.join(cfg["userdata"], "playwright-storage.json")
+                    os.makedirs(cfg["userdata"], exist_ok=True)
+                    try:
+                        ctx.storage_state(path=storage_path)
+                        print(f"✅ Storage State gespeichert: {storage_path}")
+                    except Exception as e:
+                        print(f"⚠️  Storage State: {e}")
+                else:
+                    print(f"✅ Eingeloggt (ohne Session-Speicherung) — Browser bleibt offen...")
+                    # Warten und dabei Downloads überwachen
+                    import glob as _glob
+                    known_files = set()
+                    wait_end = time.time() + 3600
+                    while time.time() < wait_end:
+                        # Downloads aus Chrome-Profil nach /downloads kopieren
+                        chrome_dl = os.path.join(profile_dir, "Default", "Downloads")
+                        # Auch direkt im profile_dir suchen
+                        for pattern in [
+                            os.path.join(profile_dir, "*.pdf"),
+                            os.path.join(profile_dir, "*.PDF"),
+                            os.path.join(profile_dir, "Default", "*.pdf"),
+                        ]:
+                            for f_path in _glob.glob(pattern):
+                                if f_path not in known_files and not f_path.endswith(".crdownload"):
+                                    known_files.add(f_path)
+                                    fname = os.path.basename(f_path)
+                                    dest = os.path.join(download_dir, fname)
+                                    try:
+                                        import shutil as _sh
+                                        _sh.copy2(f_path, dest)
+                                        print(f"📥 Download kopiert: {fname} → {download_dir}")
+                                    except Exception as e:
+                                        print(f"⚠️  Kopieren fehlgeschlagen: {e}")
+                        # Abbrechen wenn Browser geschlossen wurde
+                        try:
+                            _ = page.evaluate("1")
+                        except Exception:
+                            print(f"🔒 Browser geschlossen — Session-Modus beendet")
+                            break
+                        time.sleep(3)
             else:
-                print(f"⚠️  Login-Timeout — Session möglicherweise nicht gespeichert")
+                print(f"⚠️  Login-Timeout — Session nicht gespeichert")
 
-            context.close()
-            print(f"✅ Browser geschlossen. Session in {cfg['userdata']}")
+            browser.close()
+
+    finally:
+        proc.terminate()
+        print(f"✅ Browser geschlossen")
 
 
 @app.post("/session/init")
@@ -544,7 +639,7 @@ def session_init(req: DownloadRequest, request: Request):
     if site not in ("freenet", "netaachen", "lexware"):
         raise HTTPException(status_code=400, detail="Unsupported site")
 
-    thread = threading.Thread(target=_open_browser_for_login, args=(site,), daemon=True)
+    thread = threading.Thread(target=_open_browser_for_login, args=(site, req.save_session), daemon=True)
     thread.start()
 
     return {
@@ -636,6 +731,24 @@ async def analyze_invoice_endpoint(file: UploadFile = File(...)):
             os.unlink(tmp_path)
         except Exception:
             pass
+
+
+# ============================================================
+# File download endpoint
+# ============================================================
+
+@app.get("/downloads/file")
+async def download_file_by_path(path: str, request: Request):
+    """Einzelne Datei aus /downloads herunterladen."""
+    download_dir = os.getenv("DOWNLOAD_DIR", "/downloads")
+    # Sicherheit: nur Dateien im DOWNLOAD_DIR erlauben
+    abs_path = os.path.realpath(path)
+    abs_dir  = os.path.realpath(download_dir)
+    if not abs_path.startswith(abs_dir):
+        raise HTTPException(status_code=403, detail="Zugriff verweigert")
+    if not os.path.isfile(abs_path):
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    return FileResponse(abs_path, filename=os.path.basename(abs_path))
 
 
 # ============================================================

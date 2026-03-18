@@ -129,6 +129,20 @@ def run_freenet_download(headless=True, month_offset=0):
             ]
         )
         
+        # Storage State laden falls vorhanden
+        import json as _json
+        storage_path = os.path.join(PW_USERDATA, 'playwright-storage.json')
+        if os.path.isfile(storage_path):
+            try:
+                with open(storage_path) as _f:
+                    state = _json.load(_f)
+                cookies = state.get('cookies', [])
+                if cookies:
+                    context.add_cookies(cookies)
+                    print(f'✅ {len(cookies)} Session-Cookie(s) geladen')
+            except Exception as e:
+                print(f'⚠️  Storage State Fehler: {e}')
+
         page = context.new_page()
         
         # Anti-WebDriver-Detection
@@ -142,6 +156,27 @@ def run_freenet_download(headless=True, month_offset=0):
         page.goto(LOGIN_URL, wait_until="domcontentloaded")
         
         time.sleep(2)
+
+        # Prüfen ob Session gültig ist (kein Login-Dialog)
+        current_url = page.evaluate("window.location.href")
+        login_indicators = ["login", "signin", "auth", "id.freenet.de"]
+        if any(x in current_url.lower() for x in login_indicators):
+            raise RuntimeError(
+                f"SESSION_EXPIRED: Freenet Session abgelaufen — bitte neu einloggen. "
+                f"URL: {current_url}"
+            )
+        try:
+            login_form = page.locator("input#username, input[name='username'], input[type='password']")
+            if login_form.count() > 0 and login_form.first.is_visible():
+                raise RuntimeError(
+                    "SESSION_EXPIRED: Freenet Login-Formular sichtbar — "
+                    "bitte Session neu speichern über Admin UI → Download → Manueller Login."
+                )
+        except RuntimeError:
+            raise
+        except Exception:
+            pass
+
         page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-01-loaded.png")
         
         print("\n✅ Nutze gespeicherte Session...")

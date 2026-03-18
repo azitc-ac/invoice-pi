@@ -145,6 +145,28 @@ async def run_lexware_upload(file_path: str, headless: bool = True) -> dict:
     subprocess.run("pkill -f 'chrome-linux/chrome' 2>/dev/null", shell=True)
     await asyncio.sleep(1)
 
+    # Xvfb Lock aufräumen falls vorhanden und Xvfb nicht läuft
+    import os as _os
+    display = os.getenv("DISPLAY", ":0").replace(":", "")
+    lock_file = f"/tmp/.X{display}-lock"
+    socket_file = f"/tmp/.X11-unix/X{display}"
+    if _os.path.exists(lock_file):
+        try:
+            with open(lock_file) as _f:
+                pid = int(_f.read().strip())
+            # Prüfe ob Prozess noch läuft
+            _os.kill(pid, 0)
+        except (ProcessLookupError, ValueError):
+            # Prozess existiert nicht mehr — Lock entfernen
+            import subprocess as _sp2
+            _sp2.run(f"rm -f {lock_file} {socket_file} 2>/dev/null", shell=True)
+            print(f"🧹 Xvfb Lock entfernt: {lock_file}")
+            # Xvfb neu starten
+            _sp2.run("supervisorctl start xvfb 2>/dev/null", shell=True)
+            await asyncio.sleep(2)
+        except Exception:
+            pass
+
     print(f"🌐 Starte Chromium mit CDP auf Port {CDP_PORT}...")
     proc = subprocess.Popen([
         CHROMIUM_BIN,

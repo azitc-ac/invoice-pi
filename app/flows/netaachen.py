@@ -80,14 +80,50 @@ def run_netaachen_download(headless=True, month_offset=0):
             ]
         )
         
+        # Storage State laden falls vorhanden
+        import json as _json, os as _os
+        storage_path = _os.path.join(PW_USERDATA, 'playwright-storage.json')
+        if _os.path.isfile(storage_path):
+            try:
+                with open(storage_path) as _f:
+                    state = _json.load(_f)
+                cookies = state.get('cookies', [])
+                if cookies:
+                    context.add_cookies(cookies)
+                    print(f'✅ {len(cookies)} Session-Cookie(s) geladen')
+            except Exception as e:
+                print(f'⚠️  Storage State Fehler: {e}')
+
         page = context.new_page()
         
         print(f"📖 Gehe zu {INVOICE_URL}")
         page.goto(INVOICE_URL, wait_until="domcontentloaded")
         
-        time.sleep(1)
+        time.sleep(3)
         page.screenshot(path=f"{DOWNLOAD_DIR}/netaachen-01-loaded.png")
+
+        # Prüfen ob Session gültig ist (kein Login-Dialog)
+        current_url = page.evaluate("window.location.href")
+        login_indicators = ["login", "signin", "cas/login", "auth", "sso.netcologne"]
+        if any(x in current_url.lower() for x in login_indicators):
+            raise RuntimeError(
+                f"SESSION_EXPIRED: NetAachen Session abgelaufen — bitte neu einloggen. "
+                f"URL: {current_url}"
+            )
         
+        # Zusätzlich prüfen ob Login-Formular im DOM sichtbar
+        try:
+            login_form = page.locator("input[name='username'], input#username, input[type='password']")
+            if login_form.count() > 0 and login_form.first.is_visible():
+                raise RuntimeError(
+                    "SESSION_EXPIRED: NetAachen Login-Formular sichtbar — "
+                    "bitte Session neu speichern über Admin UI → Download → Manueller Login."
+                )
+        except RuntimeError:
+            raise
+        except Exception:
+            pass
+
         print("✅ Nutze gespeicherte Session...")
         time.sleep(1)
         
