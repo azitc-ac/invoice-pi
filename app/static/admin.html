@@ -33,7 +33,7 @@
   .dot.offline { background: var(--danger); }
 
   /* LAYOUT */
-  main { display: grid; grid-template-columns: 340px 1fr; gap: 0; height: calc(100vh - 61px); }
+  main { display: grid; grid-template-columns: var(--aside) 1fr; gap: 0; height: calc(100vh - 61px); }
   aside { border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; background: var(--surface); }
 
   /* TABS */
@@ -158,6 +158,16 @@
   .log-line.upload   { color: var(--accent3); }
   .log-empty { color: var(--muted); text-align: center; padding: 60px 0; font-size: 13px; }
   .divider { height: 1px; background: var(--border); margin: 4px 0; }
+
+  /* SIDEBAR COLLAPSE */
+  main { --aside: 340px; transition: grid-template-columns 0.2s ease; }
+  main.collapsed { --aside: 0px; }
+  main, main.collapsed { grid-template-columns: var(--aside) 1fr; }
+  aside { transition: width 0.2s ease, border-color 0.2s ease; width: var(--aside); }
+  main.collapsed aside { border-right-color: transparent; }
+  .sidebar-toggle { margin-left: 6px; padding: 6px 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--muted); cursor: pointer; font-size: 12px; font-family: var(--mono); transition: all 0.2s; }
+  .sidebar-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
 </style>
 </head>
 <body>
@@ -172,7 +182,8 @@
     <span class="header-debug-label" id="debug-header-label">Debug mode (VNC)</span>
     <a id="vnc-link" href="#" target="_blank" style="display:none;font-family:var(--mono);font-size:11px;color:var(--accent2);text-decoration:none;margin-left:4px;">↗ noVNC</a>
   </div>
-  <div class="status-pill">
+  <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Sidebar ein-/ausklappen">☰</button>
+ <div class="status-pill">
     <div class="dot" id="health-dot"></div>
     <span id="health-text">checking...</span>
   </div>
@@ -395,7 +406,7 @@
       </div>
     </div>
     <div id="log-output">
-      <span class="log-empty">Logging deaktiviert — oben einschalten.</span>
+      <span class="log-empty">Verbinde mit Log-Stream...</span>
     </div>
   </div>
 </main>
@@ -824,7 +835,7 @@
   }
 
   // ── WEBSOCKET LOGS ────────────────────────────────────────
-  let loggingEnabled = false;
+  let loggingEnabled = true;
   function toggleLogging() { if (loggingEnabled) disconnectWS(); else connectWS(); }
   function connectWS() {
     if (ws && ws.readyState < 2) return;
@@ -884,8 +895,27 @@
   }
   function setLoading(btn, loading) { btn.disabled = loading; btn.classList.toggle('loading', loading); }
 
-  // ── INIT ──────────────────────────────────────────────────
+  
+ // ── SIDEBAR TOGGLE ───────────────────────────────────────
+ function applySidebarState() {
+   const collapsed = localStorage.getItem('admin_sidebar_collapsed') === '1';
+   document.querySelector('main').classList.toggle('collapsed', collapsed);
+   document.getElementById('sidebar-toggle').textContent = collapsed ? '▸' : '☰';
+ }
+ function toggleSidebar() {
+   const mainEl = document.querySelector('main');
+   const collapsed = !mainEl.classList.contains('collapsed');
+   mainEl.classList.toggle('collapsed', collapsed);
+   localStorage.setItem('admin_sidebar_collapsed', collapsed ? '1' : '0');
+   document.getElementById('sidebar-toggle').textContent = collapsed ? '▸' : '☰';
+ }
+ document.addEventListener('click', (e)=>{ if (e.target && e.target.id === 'sidebar-toggle') toggleSidebar(); });
+ document.addEventListener('DOMContentLoaded', applySidebarState);
+
+ // ── INIT ──────────────────────────────────────────────────
   function initApp() {
+ connectWS();
+ document.getElementById("log-toggle-btn").textContent = "logging ✓";
     checkHealth(); setInterval(checkHealth, 15000);
     fetchDebugStatus(); setInterval(fetchDebugStatus, 10000);
   }
