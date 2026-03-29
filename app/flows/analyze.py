@@ -61,6 +61,7 @@ def _normalize_date(raw: str) -> str | None:
 
         "Jan.": "Jan", "Feb.": "Feb", "Mär.": "Mar", "Apr.": "Apr",
         "Jun.": "Jun", "Jul.": "Jul", "Aug.": "Aug", "Sep.": "Sep",
+        "Sept": "Sep","Sept.": "Sep",
         "Okt.": "Oct", "Nov.": "Nov", "Dez.": "Dec",
     }
 
