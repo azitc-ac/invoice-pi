@@ -346,7 +346,11 @@ def analyze_invoice(pdf_path: str) -> dict:
             "raw_text_preview": None,
         }
 
-    invoice_date = _find_date(text)
+    invoice_date = _find_date(text)  # erster Versuch
+    # Fallback: benutze den deduplizierten Preview-Text
+    if not invoice_date:
+        invoice_date = _find_date(text.replace("\u00A0", " "))
+        
     supplier = _find_supplier(text, filename)
     invoice_number = _find_invoice_number(text)
     amount = _find_amount(text)
