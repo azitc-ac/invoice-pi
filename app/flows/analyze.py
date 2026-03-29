@@ -351,18 +351,17 @@ def analyze_invoice(pdf_path: str) -> dict:
     invoice_number = _find_invoice_number(text)
     amount = _find_amount(text)
 
-    # Pieksauber: immer frühestes deutsches Datum suchen
+# Pieksauber: immer das früheste echte Datum extrahieren
     if supplier == "Pieksauber":
-        # non-breaking spaces entfernen
-        cleaned = text.replace("\u00A0", " ")
+        cleaned = text.replace("\u00A0", " ").replace("\n", " ")
 
         german = re.findall(
-            r'(\d{1,2}\.\s*(?:Jan\.?|Feb\.?|Mär\.?|Apr\.?|Mai|Jun\.?|Jul\.?|'
-            r'Aug\.?|Sep\.?|Sept\.?|Okt\.?|Nov\.?|Dez\.?|'
+            r'(\d{1,2}\.\s*(?:Jan\.?|Feb\.?|Mär\.?|Apr\.?|Mai|Jun\.?|Jul\.?|Aug\.?|'
+            r'Sep\.?|Sept\.?|Okt\.?|Nov\.?|Dez\.?|'
             r'Januar|Februar|März|April|Mai|Juni|Juli|August|September|'
             r'Oktober|November|Dezember)\s*\d{4})',
             cleaned,
-            flags=re.IGNORECASE | re.MULTILINE
+            flags=re.IGNORECASE
         )
 
         parsed = [_normalize_date(d) for d in german if _normalize_date(d)]
