@@ -6,64 +6,64 @@ from datetime import datetime
 from pathlib import Path
 
 def _ocr_text(pdf_path: str) -> str:
-    \"\"\"OCR-Fallback für gescannte PDFs ohne extrahierbaren Text.\"\"\"
+    """OCR-Fallback für gescannte PDFs ohne extrahierbaren Text."""
     try:
         from pdf2image import convert_from_path
         import pytesseract
         images = convert_from_path(pdf_path, dpi=200)
         parts = []
         for img in images[:3]:  # max 3 Seiten
-            text = pytesseract.image_to_string(img, lang=\"deu+eng\")
+            text = pytesseract.image_to_string(img, lang="deu+eng")
             if text.strip():
                 parts.append(text)
-        return \"\
-\".join(parts)
+        return "\
+".join(parts)
     except Exception as e:
-        print(f\"⚠️ OCR Fehler: {e}\")
-        return \"\"
+        print(f"⚠️ OCR Fehler: {e}")
+        return ""
 
 def _fix_microsoft_date(date_str: str) -> str:
-    \"\"\"Korrigiert Microsoft YYYY-DD-MM Datumsformat.\"\"\"
-    m = re.match(r\"(\\d{4})-(\\d{2})-(\\d{2})\", date_str)
+    """Korrigiert Microsoft YYYY-DD-MM Datumsformat."""
+    m = re.match(r"(\\d{4})-(\\d{2})-(\\d{2})", date_str)
     if m:
         y, a, b = m.group(1), int(m.group(2)), int(m.group(3))
         if a > 12 and b <= 12:
-            return f\"{y}-{b:02d}-{a:02d}\"
+            return f"{y}-{b:02d}-{a:02d}"
         if b <= 6 < a:
-            return f\"{y}-{b:02d}-{a:02d}\"
+            return f"{y}-{b:02d}-{a:02d}"
     return date_str
 
 def _normalize_date(raw: str) -> str | None:
-    \"\"\"Versucht verschiedene Datumsformate zu normalisieren → YYYY‑MM‑DD.\"\"\"
+    """Versucht verschiedene Datumsformate zu normalisieren → YYYY‑MM‑DD."""
     raw = raw.strip()
 
     formats = [
-        \"%d.%m.%Y\", \"%d.%m.%y\",
-        \"%d/%m/%Y\", \"%d/%m/%y\",
-        \"%Y-%m-%d\",
-        \"%Y/%m/%d\",
-        \"%d-%b-%Y\", \"%d-%b-%y\",
-        \"%d-%B-%Y\", \"%d-%B-%y\",
-        \"%d. %B %Y\", \"%d. %b %Y\",
-        \"%d %B %Y\", \"%d %b %Y\",
-        \"%B %d, %Y\", \"%b %d, %Y\",
+        "%d.%m.%Y", "%d.%m.%y",
+        "%d/%m/%Y", "%d/%m/%y",
+        "%Y-%m-%d",
+        "%Y/%m/%d",
+        "%d-%b-%Y", "%d-%b-%y",
+        "%d-%B-%Y", "%d-%B-%y",
+        "%d. %B %Y", "%d. %b %Y",
+        "%d %B %Y", "%d %b %Y",
+        "%B %d, %Y", "%b %d, %Y",
     ]
 
     # Monatsnamen DE → EN
     de_months = {
-        \"Januar\": \"January\", \"Februar\": \"February\", \"März\": \"March\",
-        \"April\": \"April\", \"Mai\": \"May\", \"Juni\": \"June\",
-        \"Juli\": \"July\", \"August\": \"August\", \"September\": \"September\",
-        \"Oktober\": \"October\", \"November\": \"November\", \"Dezember\": \"December\",
+        "Januar": "January", "Februar": "February", "März": "March",
+        "April": "April", "Mai": "May", "Juni": "June",
+        "Juli": "July", "August": "August", "September": "September",
+        "Oktober": "October", "November": "November", "Dezember": "December",
 
-        \"Jan\": \"Jan\", \"Feb\": \"Feb\", \"Mär\": \"Mar\", \"Apr\": \"Apr\",
-        \"Jun\": \"Jun\", \"Jul\": \"Jul\", \"Aug\": \"Aug\", \"Sep\": \"Sep\",
-        \"Okt\": \"Oct\", \"Nov\": \"Nov\", \"Dez\": \"Dec\",
+        "Jan": "Jan", "Feb": "Feb", "Mär": "Mar", "Apr": "Apr",
+        "Jun": "Jun", "Jul": "Jul", "Aug": "Aug", "Sep": "Sep",
+        "Okt": "Oct", "Nov": "Nov", "Dez": "Dec",
 
-        \"Jan.\": \"Jan\", \"Feb.\": \"Feb\", \"Mär.\": \"Mar\", \"Apr.\": \"Apr\",
-        \"Jun.\": \"Jun\", \"Jul.\": \"Jul\", \"Aug.\": \"Aug\", \"Sep.\": \"Sep\",
-        \"Sept\": \"Sep\", \"Sept.\": \"Sep\",
-        \"Okt.\": \"Oct\", \"Nov.\": \"Nov\", \"Dez.\": \"Dec\",
+        "Jan.": "Jan", "Feb.": "Feb", "Mär.": "Mar", "Apr.": "Apr",
+        "Jun.": "Jun", "Jul.": "Jul", "Aug.": "Aug", "Sep.": "Sep",
+        "Sept": "Sep", "Sept.": "Sep",
+        "Okt.": "Oct", "Nov.": "Nov", "Dez.": "Dec",
     }
 
     normalized = raw
@@ -72,14 +72,14 @@ def _normalize_date(raw: str) -> str | None:
 
     for fmt in formats:
         try:
-            return datetime.strptime(normalized, fmt).strftime(\"%Y-%m-%d\")
+            return datetime.strptime(normalized, fmt).strftime("%Y-%m-%d")
         except ValueError:
             continue
 
     return None
 
 def _deduplicate_line(line: str) -> str:
-    \"\"\"Entfernt OCR-Zeichenverdopplungen.\"\"\"
+    """Entfernt OCR-Zeichenverdopplungen."""
     if len(line) < 4:
         return line
 
@@ -98,17 +98,17 @@ def _deduplicate_line(line: str) -> str:
         else:
             i += 1
 
-    return \"\".join(result)
+    return "".join(result)
 
 def _deduplicate_chars(text: str) -> str:
-    \"\"\"Verbesserte Deduplizierung für OCR-Text.\"\"\"
+    """Verbesserte Deduplizierung für OCR-Text."""
     lines = text.splitlines()
     deduplicated_lines = []
     for line in lines:
         deduplicated_line = _deduplicate_line(line)
         deduplicated_lines.append(deduplicated_line)
-    return \"\
-\".join(deduplicated_lines)
+    return "\
+".join(deduplicated_lines)
 
 def _extract_text(pdf_path: str) -> str:
     text_parts = []
@@ -118,126 +118,126 @@ def _extract_text(pdf_path: str) -> str:
             if t:
                 text_parts.append(t)
 
-    text = \"\
-\".join(text_parts)
+    text = "\
+".join(text_parts)
     text = _deduplicate_chars(text)
 
     if len(text.strip()) < 50:
-        print(\"🔍 Wenig Text gefunden — versuche OCR...\")
+        print("🔍 Wenig Text gefunden — versuche OCR...")
         ocr = _ocr_text(pdf_path)
         if len(ocr.strip()) > len(text.strip()):
-            print(f\"✅ OCR erfolgreich: {len(ocr)} Zeichen\")
+            print(f"✅ OCR erfolgreich: {len(ocr)} Zeichen")
             text = _deduplicate_chars(ocr)
         else:
-            print(\"⚠️ OCR lieferte auch wenig Text\")
+            print("⚠️ OCR lieferte auch wenig Text")
 
     return text
 
 # Robustere Regex-Pattern für Pieksauber
 DATE_PATTERNS = [
-    r\"Belegdatum[:\\s]+(\\d{1,2}[.\\-/]\\d{1,2}[.\\-/]\\d{2,4})\",
-    r\"Rechnungsdatum[:\\s]+(\\d{1,2}[.\\-/]\\d{1,2}[.\\-/]\\d{2,4})\",
-    r\"Rechnungsdatum[:\\s]+(\\d{4}[-/]\\d{2}[-/]\\d{2})\",
-    r\"Rechnungsdatum[:\\s]+(\\d{1,2}-[A-Za-z]{3,9}-\\d{4})\",
-    r\"Datum[:\\s]+(\\d{1,2}[.\\-/]\\d{1,2}[.\\-/]\\d{2,4})\",
-    r\"Invoice Date[:\\s]+(\\d{1,2}[.\\-/]\\d{1,2}[.\\-/]\\d{2,4})\",
-    r\"Date[:\\s]+(\\d{1,2}[.\\-/]\\d{1,2}[.\\-/]\\d{2,4})\",
+    r"Belegdatum[:\\s]+(\\d{1,2}[.\\-/]\\d{1,2}[.\\-/]\\d{2,4})",
+    r"Rechnungsdatum[:\\s]+(\\d{1,2}[.\\-/]\\d{1,2}[.\\-/]\\d{2,4})",
+    r"Rechnungsdatum[:\\s]+(\\d{4}[-/]\\d{2}[-/]\\d{2})",
+    r"Rechnungsdatum[:\\s]+(\\d{1,2}-[A-Za-z]{3,9}-\\d{4})",
+    r"Datum[:\\s]+(\\d{1,2}[.\\-/]\\d{1,2}[.\\-/]\\d{2,4})",
+    r"Invoice Date[:\\s]+(\\d{1,2}[.\\-/]\\d{1,2}[.\\-/]\\d{2,4})",
+    r"Date[:\\s]+(\\d{1,2}[.\\-/]\\d{1,2}[.\\-/]\\d{2,4})",
 
     # Robustes deutsches Datum: 30. Dez. 2024 / 6. Januar 2025
-    r\"(\\d{1,2}\\.\\s*(?:Jan\\.?|Feb\\.?|Mär\\.?|Apr\\.?|Mai|Jun\\.?|Jul\\.?|Aug\\.?|Sep\\.?|Okt\\.?|Nov\\.?|Dez\\.?|Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\\s*\\d{4})\",
+    r"(\\d{1,2}\\.\\s*(?:Jan\\.?|Feb\\.?|Mär\\.?|Apr\\.?|Mai|Jun\\.?|Jul\\.?|Aug\\.?|Sep\\.?|Okt\\.?|Nov\\.?|Dez\\.?|Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\\s*\\d{4})",
 
-    r\"(\\d{1,2}\\.\\d{2}\\.\\d{4})\",
+    r"(\\d{1,2}\\.\\d{2}\\.\\d{4})",
 ]
 
 DATE_FALLBACK_PATTERNS = [
-    r\"Lieferdatum[:\\s/]+(\\d{1,2}[.\\-/]\\d{1,2}[.\\-/]\\d{2,4})\",
-    r\"Lieferdatum[:\\s/]+(\\d{1,2}\\s+\\w+\\s+\\d{4})\",
-    r\"/Lieferdatum[:\\s]+(\\d{1,2}[.\\-/]\\d{1,2}[.\\-/]\\d{2,4})\",
-    r\"/Lieferdatum[:\\s]+(\\d{1,2}\\s+\\w+\\s+\\d{4})\",
-    r\"Delivery Date[:\\s]+(\\d{1,2}[.\\-/]\\d{1,2}[.\\-/]\\d{2,4})\",
-    r\"Leistungsdatum[:\\s/]+(\\d{1,2}[.\\-/]\\d{1,2}[.\\-/]\\d{2,4})\",
+    r"Lieferdatum[:\\s/]+(\\d{1,2}[.\\-/]\\d{1,2}[.\\-/]\\d{2,4})",
+    r"Lieferdatum[:\\s/]+(\\d{1,2}\\s+\\w+\\s+\\d{4})",
+    r"/Lieferdatum[:\\s]+(\\d{1,2}[.\\-/]\\d{1,2}[.\\-/]\\d{2,4})",
+    r"/Lieferdatum[:\\s]+(\\d{1,2}\\s+\\w+\\s+\\d{4})",
+    r"Delivery Date[:\\s]+(\\d{1,2}[.\\-/]\\d{1,2}[.\\-/]\\d{2,4})",
+    r"Leistungsdatum[:\\s/]+(\\d{1,2}[.\\-/]\\d{1,2}[.\\-/]\\d{2,4})",
 ]
 
 INVOICE_NR_PATTERNS = [
-    r\"Rechnungsnummer[:\\s#]+([A-Z0-9\\-/]{4,30})\",
-    r\"Rechnungs-?Nr\\.?[:\\s#]+([A-Z0-9\\-/]{4,30})\",
-    r\"Rechnung\\s*-?\\s*Nr\\.?\\s*:?\\s*([0-9][0-9\\s\\-/]{1,15}[0-9])\",
-    r\"Invoice\\s*(?:No|Number|Nr)\\.?[:\\s#]+([A-Z0-9\\-/]{4,30})\",
-    r\"Beleg(?:nummer)?[:\\s#]+([A-Z0-9\\-/]{4,30})\",
-    r\"(?:No|Nr)\\.?[:\\s]+([A-Z0-9\\-/]{4,30})\",
+    r"Rechnungsnummer[:\\s#]+([A-Z0-9\\-/]{4,30})",
+    r"Rechnungs-?Nr\\.?[:\\s#]+([A-Z0-9\\-/]{4,30})",
+    r"Rechnung\\s*-?\\s*Nr\\.?\\s*:?\\s*([0-9][0-9\\s\\-/]{1,15}[0-9])",
+    r"Invoice\\s*(?:No|Number|Nr)\\.?[:\\s#]+([A-Z0-9\\-/]{4,30})",
+    r"Beleg(?:nummer)?[:\\s#]+([A-Z0-9\\-/]{4,30})",
+    r"(?:No|Nr)\\.?[:\\s]+([A-Z0-9\\-/]{4,30})",
 
     # Amazon
-    r\"Bestellnummer[:\\s]+(\\d{3}-\\d{7}-\\d{7})\",
-    r\"Order\\s*(?:ID|No)[:\\s]+(\\d{3}-\\d{7}-\\d{7})\",
+    r"Bestellnummer[:\\s]+(\\d{3}-\\d{7}-\\d{7})",
+    r"Order\\s*(?:ID|No)[:\\s]+(\\d{3}-\\d{7}-\\d{7})",
 
     # Microsoft
-    r\"Abrechnungsnummer\\s+([A-Z0-9\\-]{4,20})\",
+    r"Abrechnungsnummer\\s+([A-Z0-9\\-]{4,20})",
 
     # Freenet/NetAachen
-    r\"Rechnungs-ID[:\\s]+([A-Z0-9\\-]{4,20})\",
+    r"Rechnungs-ID[:\\s]+([A-Z0-9\\-]{4,20})",
 
     # Pieksauber
-    r\"(RECH\\d{8})\",
+    r"(RECH\\d{8})",
 ]
 
 AMOUNT_PATTERNS = [
-    (r\"(?:^|\
+    (r"(?:^|\
 )TOTAL\\s*\
-\\s*([\\d.,]+)\", 1),
-    (r\"Total\\s+EUR\\s+([\\d.,]+)\", 1),
-    (r\"Gesamtbetrag\\s+EUR\\s+([\\d.,]+)\", 1),
+\\s*([\\d.,]+)", 1),
+    (r"Total\\s+EUR\\s+([\\d.,]+)", 1),
+    (r"Gesamtbetrag\\s+EUR\\s+([\\d.,]+)", 1),
 
-    (r\"Gesamtsumme\\s+EUR\\s+([\\d.,]+)\", 1),
+    (r"Gesamtsumme\\s+EUR\\s+([\\d.,]+)", 1),
 
-    (r\"Zahlbetrag\\s+([\\d.,]+\\s*€)\", 1),
+    (r"Zahlbetrag\\s+([\\d.,]+\\s*€)", 1),
 
-    (r\"Rechnungsbetrag\\s+gesamt\\s+([\\d.,]+\\s*€)\", 1),
+    (r"Rechnungsbetrag\\s+gesamt\\s+([\\d.,]+\\s*€)", 1),
 
-    (r\"Fälligkeitsdatum:[^\
+    (r"Fälligkeitsdatum:[^\
 ]+\
-([\\d.,]+\\s*EUR)\", 1),
+([\\d.,]+\\s*EUR)", 1),
 
-    (r\"Gebühren:\\s*([\\d.,]+)\", 1),
+    (r"Gebühren:\\s*([\\d.,]+)", 1),
 
-    (r\"Gesamtbetrag\\s*\\(EUR\\)\\s*([\\d.,]+)\", 1),
-    (r\"Gesamtbetrag\\s+([\\d.,]+\\s*(?:EUR|Euro|€))\", 1),
-    (r\"([\\d.,]+)\\s*Euro(?!\\w)\", 1),
-    (r\"Brutto[:\\s]+([\\d.,]+\\s*(?:EUR|€))\", 1),
-    (r\"Summe[:\\s]+([\\d.,]+\\s*(?:EUR|€))\", 1),
-    (r\"Total[:\\s]+([\\d.,]+\\s*(?:EUR|€))\", 1),
-    (r\"Rechnungsbetrag[:\\s]+([\\d.,]+\\s*(?:EUR|€|Euro))\", 1),
-    (r\"Gesamtbetrag inkl[^\
-]*?([\\d.,]+\\s*(?:EUR|€))\", 1),
-    (r\"([\\d.,]+)\\s*EUR(?!\\w)(?!\\d)\", 1),
-    (r\"GESAMTBETRAG\\s+([\\d.,]+\\s*€)\", 1),
+    (r"Gesamtbetrag\\s*\\(EUR\\)\\s*([\\d.,]+)", 1),
+    (r"Gesamtbetrag\\s+([\\d.,]+\\s*(?:EUR|Euro|€))", 1),
+    (r"([\\d.,]+)\\s*Euro(?!\\w)", 1),
+    (r"Brutto[:\\s]+([\\d.,]+\\s*(?:EUR|€))", 1),
+    (r"Summe[:\\s]+([\\d.,]+\\s*(?:EUR|€))", 1),
+    (r"Total[:\\s]+([\\d.,]+\\s*(?:EUR|€))", 1),
+    (r"Rechnungsbetrag[:\\s]+([\\d.,]+\\s*(?:EUR|€|Euro))", 1),
+    (r"Gesamtbetrag inkl[^\
+]*?([\\d.,]+\\s*(?:EUR|€))", 1),
+    (r"([\\d.,]+)\\s*EUR(?!\\w)(?!\\d)", 1),
+    (r"GESAMTBETRAG\\s+([\\d.,]+\\s*€)", 1),
 ]
 
 SUPPLIER_PATTERNS = [
-    (r\"Pieksauber|PPiieekkssaauubbeerr|pieksauber\", \"Pieksauber\"),
-    (r\"Amazon Business\", \"Amazon Business EU SARL\"),
-    (r\"Amazon\\.de|amazon\\.de\", \"Amazon\"),
-    (r\"Microsoft Ireland|Microsoft Deutschland\", \"Microsoft\"),
-    (r\"freenet|Freenet\", \"Freenet\"),
-    (r\"NetAachen|net aachen\", \"NetAachen\"),
-    (r\"Tesla\", \"Tesla\"),
-    (r\"Haufe\", \"Haufe\"),
-    (r\"Google\", \"Google\"),
-    (r\"Apple\", \"Apple\"),
-    (r\"Telekom|Deutsche Telekom\", \"Telekom\"),
-    (r\"Vodafone\", \"Vodafone\"),
-    (r\"1&1|1und1\", \"1und1\"),
-    (r\"DATEV\", \"DATEV\"),
-    (r\"Lexware\", \"Lexware\"),
+    (r"Pieksauber|PPiieekkssaauubbeerr|pieksauber", "Pieksauber"),
+    (r"Amazon Business", "Amazon Business EU SARL"),
+    (r"Amazon\\.de|amazon\\.de", "Amazon"),
+    (r"Microsoft Ireland|Microsoft Deutschland", "Microsoft"),
+    (r"freenet|Freenet", "Freenet"),
+    (r"NetAachen|net aachen", "NetAachen"),
+    (r"Tesla", "Tesla"),
+    (r"Haufe", "Haufe"),
+    (r"Google", "Google"),
+    (r"Apple", "Apple"),
+    (r"Telekom|Deutsche Telekom", "Telekom"),
+    (r"Vodafone", "Vodafone"),
+    (r"1&1|1und1", "1und1"),
+    (r"DATEV", "DATEV"),
+    (r"Lexware", "Lexware"),
 ]
 
 def _find_date(text: str) -> str | None:
-    normalized_text = text.replace(\"\
-/\", \"/\")
-    normalized_text = re.sub(r\"(\\w)\
-(\\d)\", r\"\\1 \\2\", normalized_text)
+    normalized_text = text.replace("\
+/", "/")
+    normalized_text = re.sub(r"(\\w)\
+(\\d)", r"\\1 \\2", normalized_text)
 
-    normalized_text = re.sub(r\"(\\d)\\s*[-–]\\s*(\\d{2})\\s*[-–]\\s*(\\d{2})\",
-                             r\"\\1-\\2-\\3\",
+    normalized_text = re.sub(r"(\\d)\\s*[-–]\\s*(\\d{2})\\s*[-–]\\s*(\\d{2})",
+                             r"\\1-\\2-\\3",
                              normalized_text)
 
     for pattern in DATE_PATTERNS:
@@ -255,13 +255,13 @@ def _find_date(text: str) -> str | None:
                 return normalized
 
     for pattern in [
-        r\"(\\d{4}-\\d{2}-\\d{2})\",
-        r\"(\\d{1,2}\\.\\d{2}\\.\\d{4})\",
+        r"(\\d{4}-\\d{2}-\\d{2})",
+        r"(\\d{1,2}\\.\\d{2}\\.\\d{4})",
 
-        r\"(\\d{1,2}\\.\\s*(?:Jan\\.?|Feb\\.?|Mär\\.?|Apr\\.?|Mai|Jun\\.?|Jul\\.?|Aug\\.?|Sep\\.?|Okt\\.?|Nov\\.?|Dez\\.?|Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\\s*\\d{4})\",
+        r"(\\d{1,2}\\.\\s*(?:Jan\\.?|Feb\\.?|Mär\\.?|Apr\\.?|Mai|Jun\\.?|Jul\\.?|Aug\\.?|Sep\\.?|Okt\\.?|Nov\\.?|Dez\\.?|Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\\s*\\d{4})",
 
-        r\"(\\d{1,2}\\s+(?:Jan|Feb|Mär|Apr|Mai|Jun|Jul|Aug|Sep|Okt|Nov|Dez)\\.?\\s+\\d{4})\",
-        r\"(\\d{1,2}\\s+(?:Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\\s+\\d{4})\",
+        r"(\\d{1,2}\\s+(?:Jan|Feb|Mär|Apr|Mai|Jun|Jul|Aug|Sep|Okt|Nov|Dez)\\.?\\s+\\d{4})",
+        r"(\\d{1,2}\\s+(?:Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\\s+\\d{4})",
     ]:
         m = re.search(pattern, normalized_text, re.IGNORECASE)
         if m:
@@ -280,16 +280,16 @@ def _find_invoice_number(text: str) -> str | None:
 
 def _normalize_amount(val: str) -> str:
     val = val.strip()
-    val = re.sub(r\"EUR\\s*\", \"\", val).strip()
+    val = re.sub(r"EUR\\s*", "", val).strip()
 
-    if re.match(r\"^[\\d,]+\\.\\d{2}$\", val):
-        val = val.replace(\",\", \"\").replace(\".\", \",\")
+    if re.match(r"^[\\d,]+\\.\\d{2}$", val):
+        val = val.replace(",", "").replace(".", ",")
 
-    elif re.match(r\"^\\d+\\.\\d{1,2}$\", val):
-        val = val.replace(\".\", \",\")
+    elif re.match(r"^\\d+\\.\\d{1,2}$", val):
+        val = val.replace(".", ",")
 
-    if not val.endswith(\"€\"):
-        val += \" €\"
+    if not val.endswith("€"):
+        val += " €"
 
     return val
 
@@ -301,28 +301,28 @@ def _find_amount(text: str) -> str | None:
             return _normalize_amount(val)
     return None
 
-def _find_supplier(text: str, filename: str = \"\") -> str | None:
-    combined = text + \" \" + filename
+def _find_supplier(text: str, filename: str = "") -> str | None:
+    combined = text + " " + filename
 
     for pattern, name in SUPPLIER_PATTERNS:
         if re.search(pattern, combined, re.IGNORECASE):
             return name
 
     for line in text.strip().splitlines()[:10]:
-        line = re.sub(r\"^[^\\w]+\", \"\", line).strip()
-        if 3 < len(line) < 60 and not re.match(r\"^\\d\", line):
+        line = re.sub(r"^[^\\w]+", "", line).strip()
+        if 3 < len(line) < 60 and not re.match(r"^\\d", line):
             return line
 
     return None
 
 def _safe_filename(s: str) -> str:
-    s = re.sub(r'[<>:\"/\\\\|?*\\s]', \"_\", s)
-    s = re.sub(r\"_+\", \"_\", s)
-    return s.strip(\"_\")
+    s = re.sub(r'[<>:"/\\\\|?*\\s]', "_", s)
+    s = re.sub(r"_+", "_", s)
+    return s.strip("_")
 
 def analyze_invoice(pdf_path: str) -> dict:
     if not Path(pdf_path).is_file():
-        raise FileNotFoundError(f\"Datei nicht gefunden: {pdf_path}\")
+        raise FileNotFoundError(f"Datei nicht gefunden: {pdf_path}")
 
     filename = Path(pdf_path).stem
 
@@ -330,25 +330,25 @@ def analyze_invoice(pdf_path: str) -> dict:
         text = _extract_text(pdf_path)
     except Exception as e:
         return {
-            \"error\": f\"PDF konnte nicht gelesen werden: {e}\",
-            \"invoice_date\": None,
-            \"supplier\": None,
-            \"invoice_number\": None,
-            \"suggested_filename\": None,
-            \"raw_text_preview\": None,
+            "error": f"PDF konnte nicht gelesen werden: {e}",
+            "invoice_date": None,
+            "supplier": None,
+            "invoice_number": None,
+            "suggested_filename": None,
+            "raw_text_preview": None,
         }
 
     invoice_date = _find_date(text)
     if not invoice_date:
-        invoice_date = _find_date(text.replace(\"\\u00A0\", \" \"))
+        invoice_date = _find_date(text.replace("\\u00A0", " "))
         
     supplier = _find_supplier(text, filename)
     invoice_number = _find_invoice_number(text)
     amount = _find_amount(text)
 
-    if supplier == \"Pieksauber\":
-        cleaned = text.replace(\"\\u00A0\", \" \").replace(\"\
-\", \" \")
+    if supplier == "Pieksauber":
+        cleaned = text.replace("\\u00A0", " ").replace("\
+", " ")
 
         german = re.findall(
             r'(\\d{1,2}\\.\\s*(?:Jan\\.?|Feb\\.?|Mär\\.?|Apr\\.?|Mai|Jun\\.?|Jul\\.?|Aug\\.?|Sep\\.?|Okt\\.?|Nov\\.?|Dez\\.?|Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\\s*\\d{4})',
@@ -360,25 +360,25 @@ def analyze_invoice(pdf_path: str) -> dict:
         if parsed:
             invoice_date = min(parsed)
 
-    date_part = invoice_date or \"DATUM-UNBEKANNT\"
-    supplier_part = _safe_filename(supplier) if supplier else \"LIEFERANT-UNBEKANNT\"
-    number_part = _safe_filename(invoice_number) if invoice_number else \"NR-UNBEKANNT\"
+    date_part = invoice_date or "DATUM-UNBEKANNT"
+    supplier_part = _safe_filename(supplier) if supplier else "LIEFERANT-UNBEKANNT"
+    number_part = _safe_filename(invoice_number) if invoice_number else "NR-UNBEKANNT"
 
-    suggested_filename = f\"{date_part}_{supplier_part}_{number_part}.pdf\"
+    suggested_filename = f"{date_part}_{supplier_part}_{number_part}.pdf"
 
     return {
-        \"invoice_date\": invoice_date,
-        \"supplier\": supplier,
-        \"invoice_number\": invoice_number,
-        \"amount\": amount,
-        \"suggested_filename\": suggested_filename,
-        \"raw_text_preview\": text[:500] if text else None,
+        "invoice_date": invoice_date,
+        "supplier": supplier,
+        "invoice_number": invoice_number,
+        "amount": amount,
+        "suggested_filename": suggested_filename,
+        "raw_text_preview": text[:500] if text else None,
     }
 
-if __name__ == \"__main__\":
+if __name__ == "__main__":
     import sys, json
     if len(sys.argv) < 2:
-        print(\"Usage: python3 analyze.py <pdf-path>\")
+        print("Usage: python3 analyze.py <pdf-path>")
         sys.exit(1)
 
     result = analyze_invoice(sys.argv[1])
@@ -386,70 +386,70 @@ if __name__ == \"__main__\":
 
 # Speichern der aktualisierten Version
 with open('analyze_updated.py', 'w', encoding='utf-8') as f:
-    f.write(\"\"\"
+    f.write("""
 import re
 import pdfplumber
 from datetime import datetime
 from pathlib import Path
 
 def _ocr_text(pdf_path: str) -> str:
-    \"\"\"OCR-Fallback für gescannte PDFs ohne extrahierbaren Text.\"\"\"
+    """OCR-Fallback für gescannte PDFs ohne extrahierbaren Text."""
     try:
         from pdf2image import convert_from_path
         import pytesseract
         images = convert_from_path(pdf_path, dpi=200)
         parts = []
         for img in images[:3]:  # max 3 Seiten
-            text = pytesseract.image_to_string(img, lang=\"deu+eng\")
+            text = pytesseract.image_to_string(img, lang="deu+eng")
             if text.strip():
                 parts.append(text)
-        return \"\\\
-\".join(parts)
+        return "\\\
+".join(parts)
     except Exception as e:
-        print(f\"⚠️ OCR Fehler: {e}\")
-        return \"\"
+        print(f"⚠️ OCR Fehler: {e}")
+        return ""
 
 def _fix_microsoft_date(date_str: str) -> str:
-    \"\"\"Korrigiert Microsoft YYYY-DD-MM Datumsformat.\"\"\"
-    m = re.match(r\"(\\\\d{4})-(\\\\d{2})-(\\\\d{2})\", date_str)
+    """Korrigiert Microsoft YYYY-DD-MM Datumsformat."""
+    m = re.match(r"(\\\\d{4})-(\\\\d{2})-(\\\\d{2})", date_str)
     if m:
         y, a, b = m.group(1), int(m.group(2)), int(m.group(3))
         if a > 12 and b <= 12:
-            return f\"{y}-{b:02d}-{a:02d}\"
+            return f"{y}-{b:02d}-{a:02d}"
         if b <= 6 < a:
-            return f\"{y}-{b:02d}-{a:02d}\"
+            return f"{y}-{b:02d}-{a:02d}"
     return date_str
 
 def _normalize_date(raw: str) -> str | None:
-    \"\"\"Versucht verschiedene Datumsformate zu normalisieren → YYYY‑MM‑DD.\"\"\"
+    """Versucht verschiedene Datumsformate zu normalisieren → YYYY‑MM‑DD."""
     raw = raw.strip()
 
     formats = [
-        \"%d.%m.%Y\", \"%d.%m.%y\",
-        \"%d/%m/%Y\", \"%d/%m/%y\",
-        \"%Y-%m-%d\",
-        \"%Y/%m/%d\",
-        \"%d-%b-%Y\", \"%d-%b-%y\",
-        \"%d-%B-%Y\", \"%d-%B-%y\",
-        \"%d. %B %Y\", \"%d. %b %Y\",
-        \"%d %B %Y\", \"%d %b %Y\",
-        \"%B %d, %Y\", \"%b %d, %Y\",
+        "%d.%m.%Y", "%d.%m.%y",
+        "%d/%m/%Y", "%d/%m/%y",
+        "%Y-%m-%d",
+        "%Y/%m/%d",
+        "%d-%b-%Y", "%d-%b-%y",
+        "%d-%B-%Y", "%d-%B-%y",
+        "%d. %B %Y", "%d. %b %Y",
+        "%d %B %Y", "%d %b %Y",
+        "%B %d, %Y", "%b %d, %Y",
     ]
 
     de_months = {
-        \"Januar\": \"January\", \"Februar\": \"February\", \"März\": \"March\",
-        \"April\": \"April\", \"Mai\": \"May\", \"Juni\": \"June\",
-        \"Juli\": \"July\", \"August\": \"August\", \"September\": \"September\",
-        \"Oktober\": \"October\", \"November\": \"November\", \"Dezember\": \"December\",
+        "Januar": "January", "Februar": "February", "März": "March",
+        "April": "April", "Mai": "May", "Juni": "June",
+        "Juli": "July", "August": "August", "September": "September",
+        "Oktober": "October", "November": "November", "Dezember": "December",
 
-        \"Jan\": \"Jan\", \"Feb\": \"Feb\", \"Mär\": \"Mar\", \"Apr\": \"Apr\",
-        \"Jun\": \"Jun\", \"Jul\": \"Jul\", \"Aug\": \"Aug\", \"Sep\": \"Sep\",
-        \"Okt\": \"Oct\", \"Nov\": \"Nov\", \"Dez\": \"Dec\",
+        "Jan": "Jan", "Feb": "Feb", "Mär": "Mar", "Apr": "Apr",
+        "Jun": "Jun", "Jul": "Jul", "Aug": "Aug", "Sep": "Sep",
+        "Okt": "Oct", "Nov": "Nov", "Dez": "Dec",
 
-        \"Jan.\": \"Jan\", \"Feb.\": \"Feb\", \"Mär.\": \"Mar\", \"Apr.\": \"Apr\",
-        \"Jun.\": \"Jun\", \"Jul.\": \"Jul\", \"Aug.\": \"Aug\", \"Sep.\": \"Sep\",
-        \"Sept\": \"Sep\", \"Sept.\": \"Sep\",
-        \"Okt.\": \"Oct\", \"Nov.\": \"Nov\", \"Dez.\": \"Dec\",
+        "Jan.": "Jan", "Feb.": "Feb", "Mär.": "Mar", "Apr.": "Apr",
+        "Jun.": "Jun", "Jul.": "Jul", "Aug.": "Aug", "Sep.": "Sep",
+        "Sept": "Sep", "Sept.": "Sep",
+        "Okt.": "Oct", "Nov.": "Nov", "Dez.": "Dec",
     }
 
     normalized = raw
@@ -458,14 +458,14 @@ def _normalize_date(raw: str) -> str | None:
 
     for fmt in formats:
         try:
-            return datetime.strptime(normalized, fmt).strftime(\"%Y-%m-%d\")
+            return datetime.strptime(normalized, fmt).strftime("%Y-%m-%d")
         except ValueError:
             continue
 
     return None
 
 def _deduplicate_line(line: str) -> str:
-    \"\"\"Entfernt OCR-Zeichenverdopplungen.\"\"\"
+    """Entfernt OCR-Zeichenverdopplungen."""
     if len(line) < 4:
         return line
 
@@ -484,17 +484,17 @@ def _deduplicate_line(line: str) -> str:
         else:
             i += 1
 
-    return \"\".join(result)
+    return "".join(result)
 
 def _deduplicate_chars(text: str) -> str:
-    \"\"\"Verbesserte Deduplizierung für OCR-Text.\"\"\"
+    """Verbesserte Deduplizierung für OCR-Text."""
     lines = text.splitlines()
     deduplicated_lines = []
     for line in lines:
         deduplicated_line = _deduplicate_line(line)
         deduplicated_lines.append(deduplicated_line)
-    return \"\\\
-\".join(deduplicated_lines)
+    return "\\\
+".join(deduplicated_lines)
 
 def _extract_text(pdf_path: str) -> str:
     text_parts = []
@@ -504,28 +504,28 @@ def _extract_text(pdf_path: str) -> str:
             if t:
                 text_parts.append(t)
 
-    text = \"\\\
-\".join(text_parts)
+    text = "\\\
+".join(text_parts)
     text = _deduplicate_chars(text)
 
     if len(text.strip()) < 50:
-        print(\"🔍 Wenig Text gefunden — versuche OCR...\")
+        print("🔍 Wenig Text gefunden — versuche OCR...")
         ocr = _ocr_text(pdf_path)
         if len(ocr.strip()) > len(text.strip()):
-            print(f\"✅ OCR erfolgreich: {len(ocr)} Zeichen\")
+            print(f"✅ OCR erfolgreich: {len(ocr)} Zeichen")
             text = _deduplicate_chars(ocr)
         else:
-            print(\"⚠️ OCR lieferte auch wenig Text\")
+            print("⚠️ OCR lieferte auch wenig Text")
 
     return text
 
 DATE_PATTERNS = [
-    r\"Belegdatum[:\\\\s]+(\\\\\\d{1,2}[.\\\\-/]\\\\d{1,2}[.\\\\-/]\\\\d{2,4})\",
-    r\"Rechnungsdatum[:\\\\s]+(\\\\\\d{1,2}[.\\\\-/]\\\\d{1,2}[.\\\\-/]\\\\d{2,4})\",
-    r\"Rechnungsdatum[:\\\\s]+(\\\\\\d{4}[-/]\\\\d{2}[-/]\\\\d{2})\",
-    r\"Rechnungsdatum[:\\\\s]+(\\\\\\d{1,2}-[A-Za-z]{3,9}-\\\\\\d{4})\",
-    r\"Datum[:\\\\s]+(\\\\\\d{1,2}[.\\\\-/]\\\\d{1,2}[.\\\\-/]\\\\d{2,4})\",
-    r\"Invoice Date[:\\\\s]+(\\\\\\d{1,2}[.\\\\-/]\\\\d{1,2}[.\\\\-/]\\\\d{2,4})\",
-    r\"Date[:\\\\s]+(\\\\\\d{1,2}[.\\\\-/]\\\\d{1,2}[.\\\\-/]\\\\d{2,4})\",
+    r"Belegdatum[:\\\\s]+(\\\\\\d{1,2}[.\\\\-/]\\\\d{1,2}[.\\\\-/]\\\\d{2,4})",
+    r"Rechnungsdatum[:\\\\s]+(\\\\\\d{1,2}[.\\\\-/]\\\\d{1,2}[.\\\\-/]\\\\d{2,4})",
+    r"Rechnungsdatum[:\\\\s]+(\\\\\\d{4}[-/]\\\\d{2}[-/]\\\\d{2})",
+    r"Rechnungsdatum[:\\\\s]+(\\\\\\d{1,2}-[A-Za-z]{3,9}-\\\\\\d{4})",
+    r"Datum[:\\\\s]+(\\\\\\d{1,2}[.\\\\-/]\\\\d{1,2}[.\\\\-/]\\\\d{2,4})",
+    r"Invoice Date[:\\\\s]+(\\\\\\d{1,2}[.\\\\-/]\\\\d{1,2}[.\\\\-/]\\\\d{2,4})",
+    r"Date[:\\\\s]+(\\\\\\d{1,2}[.\\\\-/]\\\\d{1,2}[.\\\\-/]\\\\d{2,4})",
 
-    r\"(\\\\\\d{1,2}\\\\.\\\\s*(?:Jan\\\\.?|Feb\\\\.?|Mär\\\\.?|Apr\\\\.?|Mai|Jun\\\\.?|Jul\\\\.?|Aug\\\\.?|Sep\\\\.?|Okt\\\\.?|Nov\\\\.?|Dez\\\\.?|Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+    r"(\\\\\\d{1,2}\\\\.\\\\s*(?:Jan\\\\.?|Feb\\\\.?|Mär\\\\.?|Apr\\\\.?|Mai|Jun\\\\.?|Jul\\\\.?|Aug\\\\.?|Sep\\\\.?|Okt\\\\.?|Nov\\\\.?|Dez\\\\.?|Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
