@@ -2,7 +2,8 @@ from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconn
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from pydantic import BaseModel
 from typing import List, Optional
-from flows.freenet import run_freenet_download
+from contextlib import asynccontextmanager
+from flows.freenet import run_freenet_download, run_freenet_keepalive
 from flows.netaachen import run_netaachen_download
 from flows.lexware import run_lexware_upload
 from flows.analyze import analyze_invoice
@@ -14,8 +15,29 @@ import glob
 import shutil
 import tempfile
 import traceback
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
-app = FastAPI()
+scheduler = AsyncIOScheduler()
+
+async def _scheduled_freenet_keepalive():
+    print("⏰ Geplanter Freenet Keep-Alive gestartet (08:00)")
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, run_freenet_keepalive)
+        print("✅ Geplanter Freenet Keep-Alive erfolgreich")
+    except Exception as e:
+        print(f"⚠️ Geplanter Freenet Keep-Alive fehlgeschlagen: {e}")
+
+@asynccontextmanager
+async def lifespan(app):
+    scheduler.add_job(_scheduled_freenet_keepalive, CronTrigger(hour=8, minute=0))
+    scheduler.start()
+    print("⏰ Scheduler gestartet — Freenet Keep-Alive täglich um 08:00")
+    yield
+    scheduler.shutdown()
+
+app = FastAPI(lifespan=lifespan)
 
 lexware_lock = asyncio.Lock()
 
@@ -658,6 +680,15 @@ def session_init(req: DownloadRequest, request: Request):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+@app.post("/keepalive/freenet")
+async def keepalive_freenet():
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, run_freenet_keepalive)
+        return {"status": "ok", "message": "Freenet Session erfolgreich aktualisiert"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/debug/status")
 def debug_status(request: Request):

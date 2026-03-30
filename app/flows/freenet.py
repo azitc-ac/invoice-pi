@@ -143,6 +143,16 @@ def run_freenet_download(headless=True, month_offset=0):
             except Exception as e:
                 print(f'⚠️  Storage State Fehler: {e}')
 
+        def _save_cookies():
+            """Speichert aktuelle Cookies (ohne __cf_*) zurück in playwright-storage.json."""
+            try:
+                fresh = [c for c in context.cookies() if not c.get('name', '').startswith('__cf')]
+                with open(storage_path, 'w') as _f:
+                    _json.dump({'cookies': fresh}, _f)
+                print(f'💾 {len(fresh)} Cookie(s) zurückgespeichert')
+            except Exception as e:
+                print(f'⚠️  Cookie-Speichern fehlgeschlagen: {e}')
+
         page = context.new_page()
         
         # Anti-WebDriver-Detection
@@ -179,6 +189,7 @@ def run_freenet_download(headless=True, month_offset=0):
 
         page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-01-loaded.png")
         
+        _save_cookies()
         print("\n✅ Nutze gespeicherte Session...")
         time.sleep(2)
         page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-02-loaded.png")
@@ -212,6 +223,56 @@ def run_freenet_download(headless=True, month_offset=0):
         context.close()
         
         return [out_file]
+
+
+def run_freenet_keepalive():
+    """
+    Besucht Freenet mit gespeicherter Session, speichert frische Cookies zurück.
+    Kein Download — nur Session am Leben erhalten.
+    """
+    print("\n🔄 Freenet Keep-Alive gestartet")
+
+    for lock_file in ["SingletonLock", "SingletonCookie", "SingletonSocket"]:
+        lock_path = os.path.join(PW_USERDATA, lock_file)
+        if os.path.exists(lock_path):
+            os.remove(lock_path)
+
+    with sync_playwright() as p:
+        context = p.chromium.launch_persistent_context(
+            user_data_dir=PW_USERDATA,
+            headless=True,
+            args=["--no-sandbox", "--disable-dev-shm-usage",
+                  "--disable-blink-features=AutomationControlled", "--disable-setuid-sandbox"],
+        )
+
+        import json as _json
+        storage_path = os.path.join(PW_USERDATA, 'playwright-storage.json')
+        if os.path.isfile(storage_path):
+            try:
+                with open(storage_path) as _f:
+                    state = _json.load(_f)
+                cookies = [c for c in state.get('cookies', []) if not c.get('name', '').startswith('__cf')]
+                if cookies:
+                    context.add_cookies(cookies)
+            except Exception as e:
+                print(f'⚠️  Cookie laden fehlgeschlagen: {e}')
+
+        page = context.new_page()
+        page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => false})")
+        page.goto(LOGIN_URL, wait_until="domcontentloaded")
+        time.sleep(3)
+
+        current_url = page.evaluate("window.location.href")
+        if any(x in current_url.lower() for x in ["login", "signin", "auth", "id.freenet.de"]):
+            context.close()
+            raise RuntimeError(f"Keep-Alive: Session abgelaufen — bitte neu einloggen. URL: {current_url}")
+
+        fresh = [c for c in context.cookies() if not c.get('name', '').startswith('__cf')]
+        with open(storage_path, 'w') as _f:
+            _json.dump({'cookies': fresh}, _f)
+        print(f'✅ Keep-Alive erfolgreich — {len(fresh)} Cookie(s) aktualisiert')
+
+        context.close()
 
 
 if __name__ == "__main__":

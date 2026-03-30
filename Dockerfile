@@ -87,7 +87,8 @@ RUN pip install --no-cache-dir \
     python-multipart \
     pdfplumber \
     pytesseract \
-    pdf2image
+    pdf2image \
+    apscheduler
 
 # Ensure Chromium is installed
 RUN playwright install --with-deps chromium
