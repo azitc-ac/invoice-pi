@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from flows.freenet import run_freenet_download, run_freenet_keepalive
 from flows.netaachen import run_netaachen_download, run_netaachen_keepalive
 from flows.lexware import run_lexware_upload
-from flows.analyze import analyze_invoice
+from flows.analyze import analyze_invoice, _extract_text_both
 import os
 import subprocess
 import time
@@ -779,11 +779,12 @@ async def analyze_invoice_endpoint(
     try:
         result = analyze_invoice(tmp_path)
         result["original_filename"] = file.filename
+        result.pop("raw_text_preview", None)
         print(f"📋 Rechnung analysiert: {result.get('suggested_filename', '?')} | Datum: {result.get('invoice_date', '?')} | Betrag: {result.get('amount', '?')}")
-        if not debug:
-            result.pop("raw_text_preview", None)
-        else:
-            result["raw_text_preview"] = result.get("raw_text_preview") or ""
+        if debug:
+            plumber_text, ocr_text = _extract_text_both(tmp_path)
+            result["debug_pdfplumber"] = plumber_text[:3000]
+            result["debug_ocr"] = ocr_text[:3000]
         return result
     finally:
         try:
