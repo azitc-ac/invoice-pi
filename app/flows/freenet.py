@@ -20,6 +20,32 @@ MONTH_MAP = {
     "September": "09", "Oktober": "10", "November": "11", "Dezember": "12"
 }
 
+def _dismiss_cookie_banner(page):
+    """Versucht Cookie-Banner wegzuklicken. Ignoriert Fehler falls kein Banner vorhanden."""
+    selectors = [
+        "button#onetrust-accept-btn-handler",
+        "button.onetrust-accept-btn-handler",
+        "[id*='accept'][id*='cookie']",
+        "[class*='accept'][class*='cookie']",
+        "button:has-text('Alle akzeptieren')",
+        "button:has-text('Akzeptieren')",
+        "button:has-text('Zustimmen')",
+        "button:has-text('Accept all')",
+        "button:has-text('Accept')",
+        "button:has-text('Einverstanden')",
+    ]
+    for selector in selectors:
+        try:
+            btn = page.locator(selector).first
+            if btn.is_visible(timeout=1000):
+                btn.click()
+                print(f"🍪 Cookie-Banner weggeklickt ({selector})")
+                time.sleep(1)
+                return
+        except Exception:
+            continue
+
+
 def pick_month(page, month_offset=0):
     """Wählt Monatseintrag aus. month_offset=0 → aktuellster, 1 → Vormonat usw."""
     month_regex = "(" + "|".join(GER_MONTHS) + r")\s+20\d{2}"
@@ -190,10 +216,11 @@ def run_freenet_download(headless=True, month_offset=0):
         page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-01-loaded.png")
         
         _save_cookies()
+        _dismiss_cookie_banner(page)
         print("\n✅ Nutze gespeicherte Session...")
         time.sleep(2)
         page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-02-loaded.png")
-        
+
         # Suche Monats-Eintrag, hole Monatstext für Dateinamen
         print("\n📅 Suche Monatseintrag...")
         month_text = pick_month(page, month_offset=month_offset)
@@ -266,6 +293,8 @@ def run_freenet_keepalive():
         if any(x in current_url.lower() for x in ["login", "signin", "auth", "id.freenet.de"]):
             context.close()
             raise RuntimeError(f"Keep-Alive: Session abgelaufen — bitte neu einloggen. URL: {current_url}")
+
+        _dismiss_cookie_banner(page)
 
         fresh = [c for c in context.cookies() if not c.get('name', '').startswith('__cf')]
         with open(storage_path, 'w') as _f:
