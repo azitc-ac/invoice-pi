@@ -167,6 +167,8 @@ SUPPLIER_PATTERNS = [
     (r"Microsoft Ireland|Microsoft Deutschland", "Microsoft"),
     (r"freenet|Freenet", "Freenet"),
     (r"NetAachen|net aachen", "NetAachen"),
+    (r"STAWAG", "STAWAG"),
+    (r"WEG\s+(?:Jahres|Monats|Quartals|Betriebs)rechnung", "WEG"),
     (r"Tesla", "Tesla"),
     (r"Haufe", "Haufe"),
     (r"Google", "Google"),
@@ -335,10 +337,20 @@ def _find_supplier(text: str, filename: str = "") -> str | None:
         if re.search(pattern, combined, re.IGNORECASE):
             return name
 
-    # Fallback: erste sinnvolle Zeile
+    # Fallback 1: Zeile mit Unternehmensform (GmbH, AG, KG, …) in den ersten 25 Zeilen
+    company_re = re.compile(r"(.{3,60}?\b(?:GmbH|AG|KG|GbR|UG|e\.V\.|eG)\b)", re.IGNORECASE)
+    for line in text.strip().splitlines()[:25]:
+        m = company_re.match(line.strip())
+        if m:
+            return m.group(1).strip()
+
+    # Fallback 2: erste sinnvolle Zeile ohne Metadaten/TEL/FAX
     for line in text.strip().splitlines()[:10]:
         line = re.sub(r"^[^\w]+", "", line).strip()
-        if 3 < len(line) < 60 and not re.match(r"^\d", line):
+        if (3 < len(line) < 60
+                and not re.match(r"^\d", line)
+                and ";" not in line
+                and not re.match(r"^(?:TEL|FAX|Tel\.|Fax\.)", line, re.IGNORECASE)):
             return line
 
     return None
