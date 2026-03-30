@@ -799,7 +799,7 @@
       for (const file of renameFiles) {
         const fd = new FormData(); fd.append('file', file);
         const r = await fetch(`${API}/analyze/invoice`, { method: 'POST', headers: { 'X-API-Key': apiKey }, body: fd });
-        const d = await r.json();
+        const d = JSON.parse((await r.text()).trim());
         results.push({ file, suggested: d.suggested_filename || file.name });
         appendLog(`✏ ${file.name} → ${d.suggested_filename || '?'}`);
       }
@@ -839,7 +839,8 @@
       try {
         const url = `${API}/analyze/invoice${debugMode ? '?debug=true' : ''}`;
         const r = await fetch(url, { method: 'POST', headers: { 'X-API-Key': apiKey }, body: fd });
-        const d = await r.json();
+        const text = await r.text();
+        const d = JSON.parse(text.trim());
         analyzeResults_.push(d);
         appendLog(`🔍 ${file.name}`);
         appendLog(`   Datum: ${d.invoice_date||'?'} | Lieferant: ${d.supplier||'?'} | Nr: ${d.invoice_number||'?'} | Betrag: ${d.amount||'?'}`);
