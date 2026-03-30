@@ -224,6 +224,19 @@ def _extract_text(pdf_path: str) -> str:
             print("⚠️ OCR lieferte auch wenig Text")
 
     return text
+
+
+def _extract_text_both(pdf_path: str) -> tuple:
+    """Gibt (pdfplumber_text, ocr_text) zurück — für Debug-Zwecke."""
+    text_parts = []
+    with pdfplumber.open(pdf_path) as pdf:
+        for page in pdf.pages:
+            t = page.extract_text()
+            if t:
+                text_parts.append(t)
+    plumber_text = _deduplicate_chars("\n".join(text_parts))
+    ocr_text = _deduplicate_chars(_ocr_text(pdf_path))
+    return plumber_text, ocr_text
 def _find_date(text: str) -> str | None:
 
     # Zeilenumbrüche glätten

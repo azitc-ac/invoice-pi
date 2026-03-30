@@ -156,6 +156,7 @@
   .log-line.http     { color: #7c3aed; }
   .log-line.highlight{ color: var(--accent2); }
   .log-line.upload   { color: var(--accent3); }
+  .log-line.rawtext  { color: #f59e0b; font-size: 11px; white-space: pre-wrap; }
   .log-empty { color: var(--muted); text-align: center; padding: 60px 0; font-size: 13px; }
   .divider { height: 1px; background: var(--border); margin: 4px 0; }
 
@@ -843,7 +844,16 @@
         appendLog(`🔍 ${file.name}`);
         appendLog(`   Datum: ${d.invoice_date||'?'} | Lieferant: ${d.supplier||'?'} | Nr: ${d.invoice_number||'?'} | Betrag: ${d.amount||'?'}`);
         appendLog(`   → ${d.suggested_filename||'?'}`);
-        if (debugMode && d.raw_text_preview) appendLog(`   Rohtext: ${d.raw_text_preview.slice(0,200)}…`);
+        if (debugMode) {
+          if (d.debug_pdfplumber !== undefined) {
+            appendLog(`── pdfplumber ──────────────────────`, 'rawtext');
+            appendLog(d.debug_pdfplumber || '(leer)', 'rawtext');
+          }
+          if (d.debug_ocr !== undefined) {
+            appendLog(`── OCR ─────────────────────────────`, 'rawtext');
+            appendLog(d.debug_ocr || '(leer)', 'rawtext');
+          }
+        }
       } catch(e) { appendLog(`❌ ${file.name}: ${e.message}`); }
     }
     toast(`✓ ${analyzeFiles_.length} Datei(en) analysiert`, 'success');
@@ -889,12 +899,12 @@
   let logEmpty = true;
   function clearLogPlaceholder() { if (logEmpty) { document.getElementById('log-output').innerHTML = ''; logEmpty = false; } }
 
-  function appendLog(line) {
+  function appendLog(line, cssClass) {
     if (!verbose && classifyLine(line) === 'http') return;
     clearLogPlaceholder();
     const out = document.getElementById('log-output');
     const span = document.createElement('span');
-    span.className = 'log-line ' + classifyLine(line);
+    span.className = 'log-line ' + (cssClass || classifyLine(line));
     span.textContent = line;
     out.appendChild(span);
     out.appendChild(document.createTextNode('\n'));
