@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from contextlib import asynccontextmanager
 from flows.freenet import run_freenet_download, run_freenet_keepalive
-from flows.netaachen import run_netaachen_download
+from flows.netaachen import run_netaachen_download, run_netaachen_keepalive
 from flows.lexware import run_lexware_upload
 from flows.analyze import analyze_invoice
 import os
@@ -29,11 +29,21 @@ async def _scheduled_freenet_keepalive():
     except Exception as e:
         print(f"⚠️ Geplanter Freenet Keep-Alive fehlgeschlagen: {e}")
 
+async def _scheduled_netaachen_keepalive():
+    print("⏰ Geplanter NetAachen Keep-Alive gestartet (08:00)")
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, run_netaachen_keepalive)
+        print("✅ Geplanter NetAachen Keep-Alive erfolgreich")
+    except Exception as e:
+        print(f"⚠️ Geplanter NetAachen Keep-Alive fehlgeschlagen: {e}")
+
 @asynccontextmanager
 async def lifespan(app):
     scheduler.add_job(_scheduled_freenet_keepalive, CronTrigger(hour=8, minute=0))
+    scheduler.add_job(_scheduled_netaachen_keepalive, CronTrigger(hour=8, minute=5))
     scheduler.start()
-    print("⏰ Scheduler gestartet — Freenet Keep-Alive täglich um 08:00")
+    print("⏰ Scheduler gestartet — Keep-Alive täglich um 08:00 (Freenet) und 08:05 (NetAachen)")
     yield
     scheduler.shutdown()
 
@@ -687,6 +697,15 @@ async def keepalive_freenet():
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, run_freenet_keepalive)
         return {"status": "ok", "message": "Freenet Session erfolgreich aktualisiert"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/keepalive/netaachen")
+async def keepalive_netaachen():
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, run_netaachen_keepalive)
+        return {"status": "ok", "message": "NetAachen Session erfolgreich aktualisiert"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

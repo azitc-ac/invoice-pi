@@ -55,6 +55,32 @@ def click_top_pdf(page, date_str):
         print(f"❌ Fehler: {e}")
         return None
 
+def _dismiss_cookie_banner(page):
+    """Versucht Cookie-Banner wegzuklicken. Ignoriert Fehler falls kein Banner vorhanden."""
+    selectors = [
+        "button#onetrust-accept-btn-handler",
+        "button.onetrust-accept-btn-handler",
+        "[id*='accept'][id*='cookie']",
+        "[class*='accept'][class*='cookie']",
+        "button:has-text('Alle akzeptieren')",
+        "button:has-text('Akzeptieren')",
+        "button:has-text('Zustimmen')",
+        "button:has-text('Accept all')",
+        "button:has-text('Accept')",
+        "button:has-text('Einverstanden')",
+    ]
+    for selector in selectors:
+        try:
+            btn = page.locator(selector).first
+            if btn.is_visible(timeout=1000):
+                btn.click()
+                print(f"🍪 Cookie-Banner weggeklickt ({selector})")
+                time.sleep(1)
+                return
+        except Exception:
+            continue
+
+
 def run_netaachen_download(headless=True, month_offset=0):
     """Download NetAachen mit gespeicherter Session"""
     
@@ -87,12 +113,21 @@ def run_netaachen_download(headless=True, month_offset=0):
             try:
                 with open(storage_path) as _f:
                     state = _json.load(_f)
-                cookies = state.get('cookies', [])
+                cookies = [c for c in state.get('cookies', []) if not c.get('name', '').startswith('__cf')]
                 if cookies:
                     context.add_cookies(cookies)
-                    print(f'✅ {len(cookies)} Session-Cookie(s) geladen')
+                    print(f'✅ {len(cookies)} Session-Cookie(s) geladen (Cloudflare-Tokens gefiltert)')
             except Exception as e:
                 print(f'⚠️  Storage State Fehler: {e}')
+
+        def _save_cookies():
+            try:
+                fresh = [c for c in context.cookies() if not c.get('name', '').startswith('__cf')]
+                with open(storage_path, 'w') as _f:
+                    _json.dump({'cookies': fresh}, _f)
+                print(f'💾 {len(fresh)} Cookie(s) zurückgespeichert')
+            except Exception as e:
+                print(f'⚠️  Cookie-Speichern fehlgeschlagen: {e}')
 
         page = context.new_page()
         
@@ -124,6 +159,8 @@ def run_netaachen_download(headless=True, month_offset=0):
         except Exception:
             pass
 
+        _save_cookies()
+        _dismiss_cookie_banner(page)
         print("✅ Nutze gespeicherte Session...")
         time.sleep(1)
         
@@ -185,6 +222,54 @@ def run_netaachen_download(headless=True, month_offset=0):
             page.screenshot(path=f"{DOWNLOAD_DIR}/netaachen-error.png")
             context.close()
             raise RuntimeError("PDF-Download fehlgeschlagen!")
+
+
+def run_netaachen_keepalive():
+    """Besucht NetAachen mit gespeicherter Session, speichert frische Cookies zurück."""
+    print("\n🔄 NetAachen Keep-Alive gestartet")
+
+    for lock_file in ["SingletonLock", "SingletonCookie", "SingletonSocket"]:
+        lock_path = os.path.join(PW_USERDATA, lock_file)
+        if os.path.exists(lock_path):
+            os.remove(lock_path)
+
+    with sync_playwright() as p:
+        context = p.chromium.launch_persistent_context(
+            user_data_dir=PW_USERDATA,
+            headless=True,
+            args=["--no-sandbox", "--disable-dev-shm-usage",
+                  "--disable-blink-features=AutomationControlled", "--disable-setuid-sandbox"],
+        )
+
+        import json as _json, os as _os
+        storage_path = _os.path.join(PW_USERDATA, 'playwright-storage.json')
+        if _os.path.isfile(storage_path):
+            try:
+                with open(storage_path) as _f:
+                    state = _json.load(_f)
+                cookies = [c for c in state.get('cookies', []) if not c.get('name', '').startswith('__cf')]
+                if cookies:
+                    context.add_cookies(cookies)
+            except Exception as e:
+                print(f'⚠️  Cookie laden fehlgeschlagen: {e}')
+
+        page = context.new_page()
+        page.goto(INVOICE_URL, wait_until="domcontentloaded")
+        time.sleep(3)
+
+        current_url = page.evaluate("window.location.href")
+        if any(x in current_url.lower() for x in ["login", "signin", "cas/login", "auth", "sso.netcologne"]):
+            context.close()
+            raise RuntimeError(f"Keep-Alive: Session abgelaufen — bitte neu einloggen. URL: {current_url}")
+
+        _dismiss_cookie_banner(page)
+
+        fresh = [c for c in context.cookies() if not c.get('name', '').startswith('__cf')]
+        with open(storage_path, 'w') as _f:
+            _json.dump({'cookies': fresh}, _f)
+        print(f'✅ Keep-Alive erfolgreich — {len(fresh)} Cookie(s) aktualisiert')
+
+        context.close()
 
 
 if __name__ == "__main__":
