@@ -34,7 +34,7 @@ def _fix_microsoft_date(date_str: str) -> str:
     return date_str
 
 def _normalize_date(raw: str) -> str | None:
-    """Versucht verschiedene Datumsformate zu normalisieren → YYYY‑MM‑DD."""
+    """Versucht verschiedene Datumsformate zu normalisieren -> YYYY-MM-DD."""
     raw = raw.strip()
 
     formats = [
@@ -49,7 +49,7 @@ def _normalize_date(raw: str) -> str | None:
         "%B %d, %Y", "%b %d, %Y",
     ]
 
-    # Monatsnamen DE → EN
+    # Monatsnamen DE -> EN
     de_months = {
         "Januar": "January", "Februar": "February", "März": "March",
         "April": "April", "Mai": "May", "Juni": "June",
@@ -421,7 +421,7 @@ def _fix_microsoft_date(date_str: str) -> str:
     return date_str
 
 def _normalize_date(raw: str) -> str | None:
-    """Versucht verschiedene Datumsformate zu normalisieren → YYYY‑MM‑DD."""
+    """Versucht verschiedene Datumsformate zu normalisieren -> YYYY-MM-DD."""
     raw = raw.strip()
 
     formats = [
