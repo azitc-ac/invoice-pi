@@ -43,7 +43,7 @@ def _normalize_date(raw: str) -> str | None:
         "%Y/%m/%d",
         "%d-%b-%Y", "%d-%b-%y",
         "%d-%B-%Y", "%d-%B-%y",
-        "%d. %B %Y", "%d. %b %Y",
+        "%d. %B %Y", "%d. %b %Y", "%d. %b. %Y", "%d. %B. %Y",
         "%d %B %Y", "%d %b %Y",
         "%B %d, %Y", "%b %d, %Y",
     ]
@@ -55,14 +55,14 @@ def _normalize_date(raw: str) -> str | None:
         "Juli": "July", "August": "August", "September": "September",
         "Oktober": "October", "November": "November", "Dezember": "December",
 
+        "Jan.": "Jan", "Feb.": "Feb", "Mär.": "Mar", "Apr.": "Apr",
+        "Jun.": "Jun", "Jul.": "Jul", "Aug.": "Aug", "Sep.": "Sep",
+        "Sept.": "Sep", "Sept": "Sep",
+        "Okt.": "Oct", "Nov.": "Nov", "Dez.": "Dec",
+
         "Jan": "Jan", "Feb": "Feb", "Mär": "Mar", "Apr": "Apr",
         "Jun": "Jun", "Jul": "Jul", "Aug": "Aug", "Sep": "Sep",
         "Okt": "Oct", "Nov": "Nov", "Dez": "Dec",
-
-        "Jan.": "Jan", "Feb.": "Feb", "Mär.": "Mar", "Apr.": "Apr",
-        "Jun.": "Jun", "Jul.": "Jul", "Aug.": "Aug", "Sep.": "Sep",
-        "Sept": "Sep","Sept.": "Sep",
-        "Okt.": "Oct", "Nov.": "Nov", "Dez.": "Dec",
     }
 
     normalized = raw
@@ -355,7 +355,7 @@ def analyze_invoice(pdf_path: str) -> dict:
     if supplier == "Pieksauber":
         german = re.findall(
             r'(\d{1,2}\.\s*(?:Jan\.?|Feb\.?|Mär\.?|Apr\.?|Mai|Jun\.?|Jul\.?|'
-            r'Aug\.?|Sep\.?|Okt\.?|Nov\.?|Dez\.?|'
+            r'Aug\.?|Sept\.?|Sep\.?|Okt\.?|Nov\.?|Dez\.?|'
             r'Januar|Februar|März|April|Mai|Juni|Juli|August|September|'
             r'Oktober|November|Dezember)\s*\d{4})',
             text,
