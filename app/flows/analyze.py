@@ -227,7 +227,8 @@ def _extract_text(pdf_path: str) -> str:
 
 
 def _extract_text_both(pdf_path: str) -> tuple:
-    """Gibt (pdfplumber_text, ocr_text) zurück — für Debug-Zwecke."""
+    """Gibt (pdfplumber_text, ocr_text) zurück — für Debug-Zwecke.
+    OCR wird nur ausgeführt wenn pdfplumber wenig Text liefert (< 50 Zeichen)."""
     text_parts = []
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
@@ -235,7 +236,12 @@ def _extract_text_both(pdf_path: str) -> tuple:
             if t:
                 text_parts.append(t)
     plumber_text = _deduplicate_chars("\n".join(text_parts))
-    ocr_text = _deduplicate_chars(_ocr_text(pdf_path))
+
+    if len(plumber_text.strip()) < 50:
+        ocr_text = _deduplicate_chars(_ocr_text(pdf_path))
+    else:
+        ocr_text = "(OCR übersprungen — pdfplumber hat ausreichend Text geliefert)"
+
     return plumber_text, ocr_text
 def _find_date(text: str) -> str | None:
 

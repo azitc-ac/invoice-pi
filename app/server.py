@@ -777,12 +777,13 @@ async def analyze_invoice_endpoint(
         tmp.write(content)
         tmp_path = tmp.name
     try:
-        result = analyze_invoice(tmp_path)
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, analyze_invoice, tmp_path)
         result["original_filename"] = file.filename
         result.pop("raw_text_preview", None)
         print(f"📋 Rechnung analysiert: {result.get('suggested_filename', '?')} | Datum: {result.get('invoice_date', '?')} | Betrag: {result.get('amount', '?')}")
         if debug:
-            plumber_text, ocr_text = _extract_text_both(tmp_path)
+            plumber_text, ocr_text = await loop.run_in_executor(None, _extract_text_both, tmp_path)
             result["debug_pdfplumber"] = plumber_text[:3000]
             result["debug_ocr"] = ocr_text[:3000]
         return result
