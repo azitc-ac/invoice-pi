@@ -30,8 +30,14 @@ RUN mkdir -p /etc/apt/keyrings && \
     apt-get update && apt-get install -y --allow-downgrades firefox && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install geckodriver for ARM64
-RUN wget -q https://github.com/mozilla/geckodriver/releases/download/v0.35.0/geckodriver-v0.35.0-linux-aarch64.tar.gz -O /tmp/gd.tar.gz && \
+# Install geckodriver (automatische Architektur-Erkennung: ARM64 + x86_64)
+RUN ARCH=$(dpkg --print-architecture) && \
+    if [ "$ARCH" = "arm64" ]; then \
+        GD_FILE="geckodriver-v0.35.0-linux-aarch64.tar.gz"; \
+    else \
+        GD_FILE="geckodriver-v0.35.0-linux64.tar.gz"; \
+    fi && \
+    wget -q "https://github.com/mozilla/geckodriver/releases/download/v0.35.0/${GD_FILE}" -O /tmp/gd.tar.gz && \
     tar -xz -C /usr/local/bin -f /tmp/gd.tar.gz && \
     rm /tmp/gd.tar.gz && \
     geckodriver --version

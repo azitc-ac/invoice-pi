@@ -7,7 +7,3 @@ pwdata/
 .vscode/
 .DS_Store
 *.json
-__pycache__/
-*.pyc
-downloads/
-pwdata/
