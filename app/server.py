@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, UploadFile, File, Form, Query
-from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse, StreamingResponse
+import json as _json
 from pydantic import BaseModel
 from typing import List, Optional
 from contextlib import asynccontextmanager
@@ -769,29 +770,46 @@ async def analyze_invoice_endpoint(
     file: UploadFile = File(...),
     debug: bool = Query(False),
 ):
-    """PDF hochladen und Rechnungsdaten extrahieren (Datum, Lieferant, Rechnungsnummer).
-    Mit ?debug=true wird zusätzlich der vollständige Rohtext zurückgegeben."""
-    import tempfile
+    """PDF hochladen und Rechnungsdaten extrahieren.
+    Verwendet Streaming-Keep-Alive damit iOS Safari bei langen OCR-Läufen
+    die Verbindung nicht abbricht. Mit ?debug=true wird Rohtext zurückgegeben."""
     content = await file.read()
+    original_filename = file.filename
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
         tmp.write(content)
         tmp_path = tmp.name
-    try:
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, analyze_invoice, tmp_path)
-        result["original_filename"] = file.filename
-        result.pop("raw_text_preview", None)
-        print(f"📋 Rechnung analysiert: {result.get('suggested_filename', '?')} | Datum: {result.get('invoice_date', '?')} | Betrag: {result.get('amount', '?')}")
-        if debug:
-            plumber_text, ocr_text = await loop.run_in_executor(None, _extract_text_both, tmp_path)
-            result["debug_pdfplumber"] = plumber_text[:3000]
-            result["debug_ocr"] = ocr_text[:3000]
-        return result
-    finally:
+
+    async def _stream():
         try:
-            os.unlink(tmp_path)
-        except Exception:
-            pass
+            loop = asyncio.get_event_loop()
+            future = asyncio.ensure_future(
+                loop.run_in_executor(None, analyze_invoice, tmp_path)
+            )
+            # Keep-Alive: alle 20s ein Leerzeichen senden damit Safari nicht abbricht
+            while not future.done():
+                try:
+                    await asyncio.wait_for(asyncio.shield(future), timeout=20.0)
+                except asyncio.TimeoutError:
+                    yield b' '
+
+            result = future.result()
+            result["original_filename"] = original_filename
+            result.pop("raw_text_preview", None)
+            print(f"📋 Rechnung analysiert: {result.get('suggested_filename', '?')} | Datum: {result.get('invoice_date', '?')} | Betrag: {result.get('amount', '?')}")
+            if debug:
+                plumber_text, ocr_text = await loop.run_in_executor(
+                    None, _extract_text_both, tmp_path
+                )
+                result["debug_pdfplumber"] = plumber_text[:3000]
+                result["debug_ocr"] = ocr_text[:3000]
+            yield _json.dumps(result, ensure_ascii=False).encode()
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+    return StreamingResponse(_stream(), media_type="application/json")
 
 
 # ============================================================
