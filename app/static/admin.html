@@ -370,10 +370,10 @@
 
       <!-- NUR ANALYSIEREN -->
       <div>
-        <div class="section-label">Nur analysieren (Log)</div>
+        <div class="section-label">Rechnungsdaten auslesen</div>
         <div class="card">
           <div class="card-title">Rechnungsdaten auslesen</div>
-          <div class="card-hint">Ergebnis wird im Log rechts angezeigt.</div>
+          <div class="card-hint">Ergebnis als JSON-Datei herunterladen.</div>
           <div class="drop-zone" id="analyze-drop-zone" ondragover="onAnalyzeDragOver(event)" ondragleave="onAnalyzeDragLeave(event)" ondrop="onAnalyzeDrop(event)">
             <input type="file" id="analyze-file-input" accept=".pdf" multiple onchange="onAnalyzeFilesSelected(event)">
             <div class="drop-icon">🔍</div>
@@ -381,8 +381,15 @@
             <div class="drop-sub">mehrere Dateien möglich</div>
           </div>
           <div id="analyze-file-count" style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:6px;"></div>
-          <button class="btn btn-blue" id="btn-analyze" onclick="analyzeFiles()" disabled style="margin-top:10px;">
+          <div class="check-row" style="margin-top:10px;">
+            <input type="checkbox" id="analyze-debug" />
+            <label for="analyze-debug">Debug-Modus (Rohtext)</label>
+          </div>
+          <button class="btn btn-blue" id="btn-analyze" onclick="runAnalyzeFiles()" disabled style="margin-top:6px;">
             <span class="btn-icon">🔍</span><div class="spinner"></div>Analysieren
+          </button>
+          <button class="btn btn-secondary" id="btn-analyze-download" onclick="downloadAnalyzeResults()" style="margin-top:6px;display:none;">
+            <span class="btn-icon">⬇</span>JSON herunterladen
           </button>
         </div>
       </div>
@@ -807,6 +814,8 @@
     finally { setLoading(btn, false); }
   }
 
+  let analyzeResults_ = [];
+
   function onAnalyzeDragOver(e) { e.preventDefault(); document.getElementById('analyze-drop-zone').classList.add('drag-over'); }
   function onAnalyzeDragLeave() { document.getElementById('analyze-drop-zone').classList.remove('drag-over'); }
   function onAnalyzeDrop(e) { e.preventDefault(); onAnalyzeDragLeave(); setAnalyzeFiles(e.dataTransfer.files); }
@@ -815,23 +824,44 @@
     analyzeFiles_ = Array.from(files);
     document.getElementById('analyze-file-count').textContent = `${analyzeFiles_.length} Datei(en) ausgewählt`;
     document.getElementById('btn-analyze').disabled = analyzeFiles_.length === 0;
+    document.getElementById('btn-analyze-download').style.display = 'none';
+    analyzeResults_ = [];
   }
-  async function analyzeFiles() {
+  async function runAnalyzeFiles() {
     if (!analyzeFiles_.length) return;
     const btn = document.getElementById('btn-analyze');
+    const debugMode = document.getElementById('analyze-debug').checked;
     setLoading(btn, true);
+    analyzeResults_ = [];
     for (const file of analyzeFiles_) {
       const fd = new FormData(); fd.append('file', file);
       try {
-        const r = await fetch(`${API}/analyze/invoice`, { method: 'POST', headers: { 'X-API-Key': apiKey }, body: fd });
+        const url = `${API}/analyze/invoice${debugMode ? '?debug=true' : ''}`;
+        const r = await fetch(url, { method: 'POST', headers: { 'X-API-Key': apiKey }, body: fd });
         const d = await r.json();
+        analyzeResults_.push(d);
         appendLog(`🔍 ${file.name}`);
         appendLog(`   Datum: ${d.invoice_date||'?'} | Lieferant: ${d.supplier||'?'} | Nr: ${d.invoice_number||'?'} | Betrag: ${d.amount||'?'}`);
         appendLog(`   → ${d.suggested_filename||'?'}`);
+        if (debugMode && d.raw_text_preview) appendLog(`   Rohtext: ${d.raw_text_preview.slice(0,200)}…`);
       } catch(e) { appendLog(`❌ ${file.name}: ${e.message}`); }
     }
     toast(`✓ ${analyzeFiles_.length} Datei(en) analysiert`, 'success');
     setLoading(btn, false);
+    if (analyzeResults_.length) document.getElementById('btn-analyze-download').style.display = '';
+  }
+  function downloadAnalyzeResults() {
+    const payload = analyzeResults_.length === 1 ? analyzeResults_[0] : analyzeResults_;
+    const json = JSON.stringify(payload, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const ts = new Date().toISOString().slice(0,19).replace(/[:T]/g, '-');
+    a.download = analyzeResults_.length === 1
+      ? `analyse_${analyzeResults_[0].original_filename || ts}.json`
+      : `analyse_${ts}_${analyzeResults_.length}x.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
   }
 
   // ── WEBSOCKET LOGS ────────────────────────────────────────
