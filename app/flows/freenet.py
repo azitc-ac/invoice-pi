@@ -136,10 +136,10 @@ def run_freenet_download(headless=True, month_offset=0):
             try:
                 with open(storage_path) as _f:
                     state = _json.load(_f)
-                cookies = state.get('cookies', [])
+                cookies = [c for c in state.get('cookies', []) if not c.get('name', '').startswith('__cf')]
                 if cookies:
                     context.add_cookies(cookies)
-                    print(f'✅ {len(cookies)} Session-Cookie(s) geladen')
+                    print(f'✅ {len(cookies)} Session-Cookie(s) geladen (Cloudflare-Tokens gefiltert)')
             except Exception as e:
                 print(f'⚠️  Storage State Fehler: {e}')
 
