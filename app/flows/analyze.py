@@ -88,6 +88,7 @@ DATE_PATTERNS = [
     r"Rechnungsdatum[:\s]+(\d{1,2}-[A-Za-z]{3,9}-\d{4})",
     r"Datum[:\s]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
     r"Invoice Date[:\s]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
+    r"Date of issue[:\s]+([A-Za-z]+\s+\d{1,2},?\s+\d{4})",
     r"Date[:\s]+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
 
     # ✅ robustes deutsches Datum: 30. Dez. 2024 / 6. Januar 2025
@@ -132,7 +133,9 @@ INVOICE_NR_PATTERNS = [
 
 AMOUNT_PATTERNS = [
     (r"(?:^|\n)TOTAL\s*\n\s*([\d.,]+)", 1),
+    (r"Amount\s+due\s+€\s*([\d.,]+)", 1),
     (r"Total\s+EUR\s+([\d.,]+)", 1),
+    (r"Total\s+€\s*([\d.,]+)", 1),
     (r"Gesamtbetrag\s+EUR\s+([\d.,]+)", 1),
 
     (r"Gesamtsumme\s+EUR\s+([\d.,]+)", 1),
@@ -157,6 +160,7 @@ AMOUNT_PATTERNS = [
 ]
 
 SUPPLIER_PATTERNS = [
+    (r"Anthropic", "Anthropic"),
     (r"Pieksauber|PPiieekkssaauubbeerr|pieksauber", "Pieksauber"),
     (r"Amazon Business", "Amazon Business EU SARL"),
     (r"Amazon\.de|amazon\.de", "Amazon"),
