@@ -765,8 +765,12 @@ def debug_disable():
 # ============================================================
 
 @app.post("/analyze/invoice")
-async def analyze_invoice_endpoint(file: UploadFile = File(...)):
-    """PDF hochladen und Rechnungsdaten extrahieren (Datum, Lieferant, Rechnungsnummer)."""
+async def analyze_invoice_endpoint(
+    file: UploadFile = File(...),
+    debug: bool = Query(False),
+):
+    """PDF hochladen und Rechnungsdaten extrahieren (Datum, Lieferant, Rechnungsnummer).
+    Mit ?debug=true wird zusätzlich der vollständige Rohtext zurückgegeben."""
     import tempfile
     content = await file.read()
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
@@ -774,7 +778,12 @@ async def analyze_invoice_endpoint(file: UploadFile = File(...)):
         tmp_path = tmp.name
     try:
         result = analyze_invoice(tmp_path)
+        result["original_filename"] = file.filename
         print(f"📋 Rechnung analysiert: {result.get('suggested_filename', '?')} | Datum: {result.get('invoice_date', '?')} | Betrag: {result.get('amount', '?')}")
+        if not debug:
+            result.pop("raw_text_preview", None)
+        else:
+            result["raw_text_preview"] = result.get("raw_text_preview") or ""
         return result
     finally:
         try:
