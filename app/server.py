@@ -108,7 +108,7 @@ PW_USERDIRS = {
     "netaachen": os.getenv("PW_USERDATA_NETAACHEN", "/pwdata/netaachen"),
     "lexware": os.getenv("PW_USERDATA_LEXWARE", "/pwdata/lexware"),
 }
-FF_PROFILE_LEXWARE = os.getenv("FF_PROFILE_LEXWARE", "/pwdata/lexware-real")
+FF_PROFILE_LEXWARE = os.getenv("FF_PROFILE_LEXWARE", "/pwdata/lexware-ff")
 LOCK_FILES = ["SingletonLock", "SingletonCookie", "SingletonSocket"]
 
 @app.post("/cleanup/locks")
@@ -833,6 +833,10 @@ async def download_file_by_path(path: str, request: Request):
 # ============================================================
 
 def find_log_file() -> str | None:
+    fixed = "/var/log/supervisor/fastapi-stdout.log"
+    if os.path.isfile(fixed):
+        return fixed
+    # Fallback: alter Supervisor-Auto-Name (z.B. nach Image-Rebuild vor erstem Neustart)
     matches = glob.glob("/var/log/supervisor/fastapi-stdout---supervisor-*.log")
     return matches[0] if matches else None
 

@@ -20,6 +20,7 @@ services:
       - ./app:/app                    # Source Code
       - ./downloads:/downloads        # Downloaded Invoices
       - ./pwdata:/pwdata              # Browser Cookies & Sessions
+      - ./logs:/var/log/supervisor    # Persistente Logs
       - /dev/shm:/dev/shm             # Shared Memory für Browser
     
     # Env File für Credentials
