@@ -1,328 +1,258 @@
 import os
 import time
+import subprocess
 from playwright.sync_api import sync_playwright
 
-FR_USER = os.getenv("FREENET_USERNAME")
-FR_PASS = os.getenv("FREENET_PASSWORD")
+FR_USER      = os.getenv("FREENET_USERNAME")
+FR_PASS      = os.getenv("FREENET_PASSWORD")
 DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "/downloads")
-PW_USERDATA = os.getenv("PW_USERDATA_FREENET", "/pwdata/freenet")
+PW_USERDATA  = os.getenv("PW_USERDATA_FREENET", "/pwdata/freenet")
+CHROMIUM_BIN = "/ms-playwright/chromium-1208/chrome-linux/chrome"
+CDP_PORT     = 9225
 
 LOGIN_URL = "https://www.freenet-mobilfunk.de/onlineservice/meine-rechnungen"
 
 GER_MONTHS = [
-    "Januar","Februar","März","April","Mai","Juni",
-    "Juli","August","September","Oktober","November","Dezember"
+    "Januar", "Februar", "März", "April", "Mai", "Juni",
+    "Juli", "August", "September", "Oktober", "November", "Dezember",
 ]
 
 MONTH_MAP = {
     "Januar": "01", "Februar": "02", "März": "03", "April": "04",
     "Mai": "05", "Juni": "06", "Juli": "07", "August": "08",
-    "September": "09", "Oktober": "10", "November": "11", "Dezember": "12"
+    "September": "09", "Oktober": "10", "November": "11", "Dezember": "12",
 }
 
+
 def _dismiss_cookie_banner(page):
-    """Versucht Cookie-Banner wegzuklicken. Ignoriert Fehler falls kein Banner vorhanden."""
     selectors = [
         "button#onetrust-accept-btn-handler",
         "button.onetrust-accept-btn-handler",
-        "[id*='accept'][id*='cookie']",
-        "[class*='accept'][class*='cookie']",
         "button:has-text('Alle akzeptieren')",
         "button:has-text('Akzeptieren')",
         "button:has-text('Zustimmen')",
         "button:has-text('Accept all')",
         "button:has-text('Accept')",
         "button:has-text('Einverstanden')",
+        "[id*='accept'][id*='cookie']",
+        "[class*='accept'][class*='cookie']",
     ]
-    for selector in selectors:
+    for sel in selectors:
         try:
-            btn = page.locator(selector).first
-            if btn.is_visible(timeout=1000):
+            btn = page.locator(sel).first
+            if btn.is_visible(timeout=1500):
                 btn.click()
-                print(f"🍪 Cookie-Banner weggeklickt ({selector})")
+                print(f"🍪 Cookie-Banner weggeklickt ({sel})")
                 time.sleep(1)
                 return
         except Exception:
             continue
 
 
+def _handle_cloudflare(page, timeout=25):
+    """Klickt Cloudflare 'Ich bin kein Roboter' Checkbox falls vorhanden."""
+    print("🛡️ Prüfe auf Cloudflare-Challenge...")
+    iframe_selectors = [
+        "iframe[src*='challenges.cloudflare.com']",
+        "iframe[src*='cloudflare.com']",
+        "iframe[title*='Widget']",
+        "iframe[title*='challenge']",
+    ]
+    element_selectors = [
+        "input[type='checkbox']",
+        "label.ctp-checkbox-label",
+        ".ctp-checkbox-label",
+        "span.mark",
+    ]
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        for iframe_sel in iframe_selectors:
+            try:
+                frame = page.frame_locator(iframe_sel)
+                for el_sel in element_selectors:
+                    try:
+                        el = frame.locator(el_sel).first
+                        if el.is_visible(timeout=1000):
+                            el.click()
+                            print("✅ Cloudflare-Checkbox geklickt!")
+                            time.sleep(3)
+                            return True
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+        time.sleep(0.5)
+    print("ℹ️ Keine Cloudflare-Challenge erkannt")
+    return False
+
+
+def _login(page):
+    """Füllt Login-Formular aus und wartet auf erfolgreichen Redirect."""
+    print("🔐 Warte auf Login-Formular...")
+    try:
+        page.wait_for_selector("input#username, input[name='username']", timeout=15000)
+        page.fill("input#username", FR_USER or "")
+        page.fill("input#password", FR_PASS or "")
+        print("✅ Credentials ausgefüllt")
+    except Exception as e:
+        raise RuntimeError(f"Login-Formular nicht gefunden: {e}")
+
+    _handle_cloudflare(page)
+
+    try:
+        page.click("button[type='submit']", timeout=5000)
+    except Exception as e:
+        print(f"⚠️ Submit-Button: {e}")
+
+    print("⏳ Warte auf erfolgreichen Login...")
+    try:
+        page.wait_for_function(
+            "() => !window.location.href.includes('login') "
+            "   && !window.location.href.includes('id.freenet')",
+            timeout=30000,
+        )
+        print(f"✅ Login erfolgreich: {page.evaluate('window.location.href')}")
+    except Exception as e:
+        raise RuntimeError(f"Login fehlgeschlagen oder Timeout: {e}")
+    time.sleep(2)
+
+
 def pick_month(page, month_offset=0):
-    """Wählt Monatseintrag aus. month_offset=0 → aktuellster, 1 → Vormonat usw."""
     month_regex = "(" + "|".join(GER_MONTHS) + r")\s+20\d{2}"
     tiles = page.locator(f"text=/{month_regex}/i")
-
     count = tiles.count()
     print(f"🔍 Suche Monate: {count} gefunden, offset={month_offset}")
-
     if count > month_offset:
         tile = tiles.nth(month_offset)
         month_text = tile.text_content().strip()
         tile.click()
         print(f"✅ Klicke auf Monat [{month_offset}]: {month_text}")
-        return month_text  # z.B. "Februar 2026"
-
-    print(f"❌ Monat mit offset={month_offset} nicht gefunden (nur {count} vorhanden)!")
+        return month_text
+    print(f"❌ Monat mit offset={month_offset} nicht gefunden!")
     return None
 
+
 def month_text_to_date_str(month_text):
-    """'Februar 2026' → '2026-02'"""
     try:
         parts = month_text.strip().split()
-        month_num = MONTH_MAP.get(parts[0], "00")
-        return f"{parts[1]}-{month_num}"
+        return f"{parts[1]}-{MONTH_MAP.get(parts[0], '00')}"
     except Exception:
         return "0000-00"
 
+
 def click_top_pdf(page):
-    """Klicke auf obersten PDF-Link (nach Y-Position sortiert)"""
-    print(f"🔍 Suche PDF-Links...")
-    
+    print("🔍 Suche PDF-Links...")
     pdflinks = page.get_by_text("PDF")
     count = pdflinks.count()
     print(f"📝 Gefunden: {count} PDF-Links")
-    
     if count == 0:
-        print("❌ Keine PDF-Links gefunden!")
         return False
-    
     pdf_positions = []
     for i in range(count):
         try:
-            locator = pdflinks.nth(i)
-            bbox = locator.bounding_box()
+            bbox = pdflinks.nth(i).bounding_box()
             if bbox:
-                pdf_positions.append({
-                    'locator': locator,
-                    'y': bbox['y'],
-                    'index': i
-                })
-                print(f"  Link {i}: Y={bbox['y']}")
-        except:
+                pdf_positions.append({"locator": pdflinks.nth(i), "y": bbox["y"]})
+        except Exception:
             pass
-    
     if not pdf_positions:
-        print("❌ Konnte Y-Positionen nicht bestimmen!")
         return False
-    
-    top_pdf = sorted(pdf_positions, key=lambda x: x['y'])[0]
-    print(f"✅ Wähle obersten PDF-Link (Y={top_pdf['y']})")
-    
+    top = sorted(pdf_positions, key=lambda x: x["y"])[0]
     try:
-        top_pdf['locator'].scroll_into_view_if_needed()
+        top["locator"].scroll_into_view_if_needed()
         time.sleep(1)
-        top_pdf['locator'].click(timeout=5000)
+        top["locator"].click(timeout=5000)
         print("✅ PDF-Link geklickt!")
         return True
     except Exception as e:
-        print(f"❌ Fehler beim Click: {e}")
+        print(f"❌ Click-Fehler: {e}")
         return False
 
-def save_download(download, download_dir, date_str):
-    """Speichere Download mit sprechendem Dateinamen"""
-    filename = f"Rechnung_Freenet_{date_str}.pdf"
-    path = os.path.join(download_dir, filename)
-    download.save_as(path)
-    print(f"✅ PDF gespeichert: {path}")
-    return path
 
 def run_freenet_download(headless=True, month_offset=0):
-    """
-    Download Freenet Rechnungen via Playwright
-    
-    headless=False: Manuelles Einloggen + Session speichern (einmalig!)
-    headless=True: Nutzt gespeicherte Session (automatisch)
-    """
-    
-    print(f"\n🚀 Starte Playwright (headless={headless})")
-    print(f"📁 User Data Dir: {PW_USERDATA}")
+    """Freenet Download mit frischem Login via CDP (Cloudflare-kompatibel).
 
-    # Stale Lock-Dateien entfernen (verhindert "profile in use" Fehler nach Absturz)
+    Läuft immer auf DISPLAY=:0 (Xvfb) — kein --headless, da Cloudflare
+    headless Browser erkennt und blockiert.
+    """
+    print(f"\n🚀 Starte Freenet Download (CDP, fresh login, offset={month_offset})")
+
     for lock_file in ["SingletonLock", "SingletonCookie", "SingletonSocket"]:
         lock_path = os.path.join(PW_USERDATA, lock_file)
         if os.path.exists(lock_path):
             os.remove(lock_path)
-            print(f"\U0001f9f9 Lock-Datei entfernt: {lock_path}")
+            print(f"🧹 Lock entfernt: {lock_path}")
 
-    with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
-            user_data_dir=PW_USERDATA,
-            headless=headless,
-            args=[
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-blink-features=AutomationControlled",
-                "--disable-setuid-sandbox",
-            ]
-        )
-        
-        # Storage State laden falls vorhanden
-        import json as _json
-        storage_path = os.path.join(PW_USERDATA, 'playwright-storage.json')
-        if os.path.isfile(storage_path):
-            try:
-                with open(storage_path) as _f:
-                    state = _json.load(_f)
-                cookies = [c for c in state.get('cookies', []) if not c.get('name', '').startswith('__cf')]
-                if cookies:
-                    context.add_cookies(cookies)
-                    print(f'✅ {len(cookies)} Session-Cookie(s) geladen (Cloudflare-Tokens gefiltert)')
-            except Exception as e:
-                print(f'⚠️  Storage State Fehler: {e}')
+    subprocess.run(
+        f"pkill -f 'remote-debugging-port={CDP_PORT}' 2>/dev/null",
+        shell=True,
+    )
+    time.sleep(1)
 
-        def _save_cookies():
-            """Speichert aktuelle Cookies (ohne __cf_*) zurück in playwright-storage.json."""
-            try:
-                fresh = [c for c in context.cookies() if not c.get('name', '').startswith('__cf')]
-                with open(storage_path, 'w') as _f:
-                    _json.dump({'cookies': fresh}, _f)
-                print(f'💾 {len(fresh)} Cookie(s) zurückgespeichert')
-            except Exception as e:
-                print(f'⚠️  Cookie-Speichern fehlgeschlagen: {e}')
+    env = {**os.environ, "DISPLAY": ":0"}
+    proc = subprocess.Popen(
+        [
+            CHROMIUM_BIN,
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-blink-features=AutomationControlled",
+            f"--remote-debugging-port={CDP_PORT}",
+            f"--user-data-dir={PW_USERDATA}",
+            "--window-size=1280,900",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env=env,
+    )
+    time.sleep(3)
 
-        page = context.new_page()
-        
-        # Anti-WebDriver-Detection
-        page.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', {
-                get: () => false,
-            });
-        """)
-        
-        print(f"📖 Gehe zu {LOGIN_URL}")
-        page.goto(LOGIN_URL, wait_until="domcontentloaded")
-        
-        time.sleep(2)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.connect_over_cdp(f"http://localhost:{CDP_PORT}")
+            ctx = browser.contexts[0] if browser.contexts else browser.new_context()
+            page = ctx.pages[0] if ctx.pages else ctx.new_page()
 
-        # Prüfen ob Session gültig ist (kein Login-Dialog)
-        current_url = page.evaluate("window.location.href")
-        login_indicators = ["login", "signin", "auth", "id.freenet.de"]
-        if any(x in current_url.lower() for x in login_indicators):
-            raise RuntimeError(
-                f"SESSION_EXPIRED: Freenet Session abgelaufen — bitte neu einloggen. "
-                f"URL: {current_url}"
-            )
-        try:
-            login_form = page.locator("input#username, input[name='username'], input[type='password']")
-            if login_form.count() > 0 and login_form.first.is_visible():
-                raise RuntimeError(
-                    "SESSION_EXPIRED: Freenet Login-Formular sichtbar — "
-                    "bitte Session neu speichern über Admin UI → Download → Manueller Login."
-                )
-        except RuntimeError:
-            raise
-        except Exception:
-            pass
+            print(f"📖 Navigiere zu {LOGIN_URL}")
+            page.goto(LOGIN_URL, wait_until="domcontentloaded")
+            time.sleep(2)
 
-        page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-01-loaded.png")
-        
-        _save_cookies()
-        _dismiss_cookie_banner(page)
-        print("\n✅ Nutze gespeicherte Session...")
-        time.sleep(2)
-        page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-02-loaded.png")
+            _dismiss_cookie_banner(page)
+            _login(page)
 
-        # Suche Monats-Eintrag, hole Monatstext für Dateinamen
-        print("\n📅 Suche Monatseintrag...")
-        month_text = pick_month(page, month_offset=month_offset)
-        if not month_text:
-            page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-error-no-month.png")
-            raise RuntimeError("Konnte keinen Monatseintrag finden!")
-        
-        date_str = month_text_to_date_str(month_text)  # z.B. "2026-02"
-        print(f"📅 Datums-String für Dateinamen: {date_str}")
-        
-        print("⏳ Warte 5 Sekunden auf Seite zu laden...")
-        time.sleep(5)
-        page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-03-month-selected.png")
-        
-        # Download PDF
-        print("\n📥 Suche PDF-Link...")
-        with page.expect_download() as dl_info:
-            if not click_top_pdf(page):
-                page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-error-no-pdf.png")
-                raise RuntimeError("Konnte keinen PDF-Link finden!")
-        
-        download = dl_info.value
-        out_file = save_download(download, DOWNLOAD_DIR, date_str)
-        
-        page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-04-downloaded.png")
-        
-        context.close()
-        
-        return [out_file]
+            page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-01-logged-in.png")
+
+            print("\n📅 Suche Monatseintrag...")
+            month_text = pick_month(page, month_offset=month_offset)
+            if not month_text:
+                page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-error-no-month.png")
+                raise RuntimeError("Konnte keinen Monatseintrag finden!")
+
+            date_str = month_text_to_date_str(month_text)
+            print(f"📅 Datums-String: {date_str}")
+            time.sleep(5)
+            page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-02-month.png")
+
+            print("\n📥 Starte PDF-Download...")
+            with page.expect_download() as dl_info:
+                if not click_top_pdf(page):
+                    page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-error-no-pdf.png")
+                    raise RuntimeError("Konnte keinen PDF-Link finden!")
+
+            download = dl_info.value
+            filename = f"Rechnung_Freenet_{date_str}.pdf"
+            path = os.path.join(DOWNLOAD_DIR, filename)
+            download.save_as(path)
+            print(f"✅ PDF gespeichert: {path}")
+
+            page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-03-done.png")
+            browser.close()
+            return [path]
+
+    finally:
+        proc.terminate()
+        print("✅ Chromium beendet")
 
 
 def run_freenet_keepalive():
-    """
-    Besucht Freenet mit gespeicherter Session, speichert frische Cookies zurück.
-    Kein Download — nur Session am Leben erhalten.
-    """
-    print("\n🔄 Freenet Keep-Alive gestartet")
-
-    for lock_file in ["SingletonLock", "SingletonCookie", "SingletonSocket"]:
-        lock_path = os.path.join(PW_USERDATA, lock_file)
-        if os.path.exists(lock_path):
-            os.remove(lock_path)
-
-    with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
-            user_data_dir=PW_USERDATA,
-            headless=True,
-            args=["--no-sandbox", "--disable-dev-shm-usage",
-                  "--disable-blink-features=AutomationControlled", "--disable-setuid-sandbox"],
-        )
-
-        import json as _json
-        storage_path = os.path.join(PW_USERDATA, 'playwright-storage.json')
-        if os.path.isfile(storage_path):
-            try:
-                with open(storage_path) as _f:
-                    state = _json.load(_f)
-                cookies = [c for c in state.get('cookies', []) if not c.get('name', '').startswith('__cf')]
-                if cookies:
-                    context.add_cookies(cookies)
-            except Exception as e:
-                print(f'⚠️  Cookie laden fehlgeschlagen: {e}')
-
-        page = context.new_page()
-        page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => false})")
-        page.goto(LOGIN_URL, wait_until="domcontentloaded")
-        time.sleep(3)
-
-        current_url = page.evaluate("window.location.href")
-        if any(x in current_url.lower() for x in ["login", "signin", "auth", "id.freenet.de"]):
-            context.close()
-            raise RuntimeError(f"Keep-Alive: Session abgelaufen — bitte neu einloggen. URL: {current_url}")
-
-        _dismiss_cookie_banner(page)
-
-        fresh = [c for c in context.cookies() if not c.get('name', '').startswith('__cf')]
-        with open(storage_path, 'w') as _f:
-            _json.dump({'cookies': fresh}, _f)
-        print(f'✅ Keep-Alive erfolgreich — {len(fresh)} Cookie(s) aktualisiert')
-
-        context.close()
-
-
-if __name__ == "__main__":
-    import sys
-    
-    headless = True
-    if len(sys.argv) > 1 and sys.argv[1] == "--gui":
-        headless = False
-    
-    print("\n" + "="*60)
-    if headless:
-        print("🤖 HEADLESS-MODUS (automatisch, schnell)")
-    else:
-        print("🖥️  GUI-MODUS (du siehst den Browser)")
-    print("="*60)
-    
-    run_freenet_download(headless=headless)
-    
-    print("\n" + "="*60)
-    if headless:
-        print("✅ Download abgeschlossen!")
-    else:
-        print("✅ GUI-Test abgeschlossen!")
-    print("="*60)
+    """Nicht mehr benötigt — Freenet nutzt jetzt Fresh Login."""
+    print("ℹ️ Freenet Keep-Alive übersprungen (Fresh-Login-Modus aktiv)")
