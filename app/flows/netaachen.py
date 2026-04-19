@@ -27,27 +27,61 @@ MONTH_MAP = {
 
 def _dismiss_cookie_banner(page):
     selectors = [
-        "button#onetrust-accept-btn-handler",
-        "button.onetrust-accept-btn-handler",
+        # NetAachen / NetCologne: Accept-Link ist ein <a>-Tag, kein <button>
+        "#nc-cookiebanner a:has-text('Alle akzeptieren')",
+        "[name='nc-cookiebanner'] a:has-text('Alle akzeptieren')",
+        "a:has-text('Alle akzeptieren')",
+        "#nc-cookiebanner a",
+        "[name='nc-cookiebanner'] a",
+        # Fallback mit button-Tags
+        "#nc-cookiebanner button",
+        "[name='nc-cookiebanner'] button",
         "button:has-text('Alle akzeptieren')",
         "button:has-text('Akzeptieren')",
+        "a:has-text('Akzeptieren')",
         "button:has-text('Zustimmen')",
+        "button:has-text('Einverstanden')",
+        # OneTrust
+        "button#onetrust-accept-btn-handler",
+        "button.onetrust-accept-btn-handler",
         "button:has-text('Accept all')",
         "button:has-text('Accept')",
-        "button:has-text('Einverstanden')",
         "[id*='accept'][id*='cookie']",
         "[class*='accept'][class*='cookie']",
     ]
-    for sel in selectors:
-        try:
-            btn = page.locator(sel).first
-            if btn.is_visible(timeout=1500):
-                btn.click()
-                print(f"🍪 Cookie-Banner weggeklickt ({sel})")
-                time.sleep(1)
-                return
-        except Exception:
-            continue
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        for sel in selectors:
+            try:
+                btn = page.locator(sel).first
+                if btn.is_visible(timeout=500):
+                    btn.click()
+                    print(f"🍪 Cookie-Banner weggeklickt ({sel})")
+                    time.sleep(1)
+                    return
+            except Exception:
+                continue
+        time.sleep(0.5)
+    # Letzter Versuch per JavaScript
+    try:
+        clicked = page.evaluate("""
+            () => {
+                const banner = document.querySelector('#nc-cookiebanner, [name="nc-cookiebanner"]');
+                if (!banner) return false;
+                const elems = banner.querySelectorAll('a, button');
+                const accept = [...elems].find(b => b.textContent.includes('akzeptieren') || b.textContent.includes('Akzeptieren') || b.textContent.includes('Accept'));
+                if (accept) { accept.click(); return true; }
+                if (elems.length) { elems[elems.length - 1].click(); return true; }
+                return false;
+            }
+        """)
+        if clicked:
+            print("🍪 Cookie-Banner per JS weggeklickt")
+            time.sleep(1)
+            return
+    except Exception:
+        pass
+    print("ℹ️ Kein Cookie-Banner gefunden")
 
 
 def _login(page):
@@ -138,20 +172,42 @@ def run_netaachen_download(headless=True, month_offset=0):
 
         print(f"📖 Navigiere zu {LOGIN_URL}")
         page.goto(LOGIN_URL, wait_until="domcontentloaded")
-        time.sleep(2)
+        try:
+            page.wait_for_url(
+                lambda url: "meinekundenwelt" in url or "sso.netcologne" in url or "cas/login" in url,
+                timeout=10000,
+            )
+        except Exception:
+            pass
 
+        current_url = page.url
+        print(f"📍 URL nach Navigation: {current_url}")
+
+        if "meinekundenwelt" in current_url and "cas/login" not in current_url:
+            print("✅ Bereits eingeloggt (Session noch aktiv)")
+        else:
+            _login(page)
+
+        # Kurz warten damit der Cookie-Banner per JS laden kann
+        page.wait_for_load_state("load")
+        time.sleep(2)
         _dismiss_cookie_banner(page)
-        _login(page)
 
         page.screenshot(path=f"{DOWNLOAD_DIR}/netaachen-01-logged-in.png")
 
         # Navigiere zu "Meine Rechnungen"
         print("\n📋 Öffne Meine Rechnungen...")
         try:
-            page.get_by_text("Meine Rechnungen").first.click()
+            page.get_by_text("Meine Rechnungen").first.click(timeout=5000)
             time.sleep(2)
-        except Exception as e:
-            print(f"⚠️ Meine Rechnungen: {e}")
+        except Exception:
+            # Cookie-Banner könnte erst jetzt erschienen sein
+            _dismiss_cookie_banner(page)
+            try:
+                page.get_by_text("Meine Rechnungen").first.click(timeout=10000)
+                time.sleep(2)
+            except Exception as e:
+                print(f"⚠️ Meine Rechnungen: {e}")
 
         # Rechnung auswählen
         print(f"📄 Wähle Rechnung (offset={month_offset})...")
