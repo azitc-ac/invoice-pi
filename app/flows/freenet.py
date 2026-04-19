@@ -7,7 +7,7 @@ FR_USER      = os.getenv("FREENET_USERNAME")
 FR_PASS      = os.getenv("FREENET_PASSWORD")
 DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "/downloads")
 PW_USERDATA  = os.getenv("PW_USERDATA_FREENET", "/pwdata/freenet")
-CHROMIUM_BIN = "/ms-playwright/chromium-1208/chrome-linux/chrome"
+CHROMIUM_BIN = os.getenv("CHROMIUM_BIN", "/ms-playwright/chromium-1208/chrome-linux/chrome")
 CDP_PORT     = 9225
 
 LOGIN_URL = "https://www.freenet-mobilfunk.de/onlineservice/meine-rechnungen"
@@ -235,12 +235,24 @@ def run_freenet_download(headless=True, month_offset=0):
     )
     time.sleep(2)
 
-    if not os.path.exists(CHROMIUM_BIN):
-        raise RuntimeError(f"Chromium Binary nicht gefunden: {CHROMIUM_BIN}")
+    chromium_bin = CHROMIUM_BIN
+    if not os.path.exists(chromium_bin):
+        # Hardcoded path outdated — search for actual Playwright Chromium
+        result = subprocess.run(
+            "find /ms-playwright -name 'chrome' -type f 2>/dev/null | head -1",
+            shell=True, capture_output=True, text=True,
+        )
+        found = result.stdout.strip()
+        if found:
+            chromium_bin = found
+            print(f"🔍 Chromium gefunden (abweichender Pfad): {chromium_bin}")
+        else:
+            raise RuntimeError(f"Chromium Binary nicht gefunden: {chromium_bin} (kein Fallback)")
+    print(f"🖥️ Starte Chromium: {chromium_bin}")
 
     proc = subprocess.Popen(
         [
-            CHROMIUM_BIN,
+            chromium_bin,
             "--no-sandbox",
             "--disable-dev-shm-usage",
             "--disable-blink-features=AutomationControlled",
