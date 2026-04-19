@@ -223,17 +223,27 @@ def run_freenet_download(headless=True, month_offset=0):
     )
     time.sleep(1)
 
-    env = {**os.environ, "DISPLAY": ":0"}
-
-    # Check Xvfb is actually running on :0
-    if os.path.exists("/tmp/.X11-unix/X0"):
-        print("✅ Xvfb läuft auf DISPLAY=:0")
+    # Start a dedicated Xvfb on :2 with -ac (no auth) for Chromium.
+    # The supervisord Xvfb on :0 was started without -ac, so Chromium's
+    # Ozone X11 backend can't authenticate. :2 is our private display.
+    chromium_display = ":2"
+    subprocess.Popen(
+        f"pkill -f 'Xvfb {chromium_display}' 2>/dev/null; "
+        f"Xvfb {chromium_display} -screen 0 1280x900x24 -ac",
+        shell=True,
+    )
+    time.sleep(1)
+    if os.path.exists(f"/tmp/.X11-unix/X{chromium_display.lstrip(':')}"):
+        print(f"✅ Eigener Xvfb auf DISPLAY={chromium_display}")
     else:
-        print("⚠️ /tmp/.X11-unix/X0 nicht gefunden — Xvfb läuft möglicherweise nicht!")
+        print(f"⚠️ Xvfb auf {chromium_display} nicht bereit, falle auf :0 zurück")
+        chromium_display = ":0"
+
+    env = {**os.environ, "DISPLAY": chromium_display}
 
     # Start window manager via shell — no exception if fluxbox is absent
     subprocess.Popen(
-        "fluxbox -display :0",
+        f"fluxbox -display {chromium_display}",
         shell=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
