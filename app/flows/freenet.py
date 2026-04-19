@@ -225,6 +225,12 @@ def run_freenet_download(headless=True, month_offset=0):
 
     env = {**os.environ, "DISPLAY": ":0"}
 
+    # Check Xvfb is actually running on :0
+    if os.path.exists("/tmp/.X11-unix/X0"):
+        print("✅ Xvfb läuft auf DISPLAY=:0")
+    else:
+        print("⚠️ /tmp/.X11-unix/X0 nicht gefunden — Xvfb läuft möglicherweise nicht!")
+
     # Start window manager via shell — no exception if fluxbox is absent
     subprocess.Popen(
         "fluxbox -display :0",
@@ -237,7 +243,6 @@ def run_freenet_download(headless=True, month_offset=0):
 
     chromium_bin = CHROMIUM_BIN
     if not os.path.exists(chromium_bin):
-        # Hardcoded path outdated — search for actual Playwright Chromium
         result = subprocess.run(
             "find /ms-playwright -name 'chrome' -type f 2>/dev/null | head -1",
             shell=True, capture_output=True, text=True,
@@ -250,18 +255,23 @@ def run_freenet_download(headless=True, month_offset=0):
             raise RuntimeError(f"Chromium Binary nicht gefunden: {chromium_bin} (kein Fallback)")
     print(f"🖥️ Starte Chromium: {chromium_bin}")
 
+    import tempfile
+    _stderr_tmp = tempfile.NamedTemporaryFile(delete=False, suffix="-chromium.log")
+    _stderr_tmp.close()
+
     proc = subprocess.Popen(
         [
             chromium_bin,
             "--no-sandbox",
             "--disable-dev-shm-usage",
+            "--disable-gpu",
             "--disable-blink-features=AutomationControlled",
             f"--remote-debugging-port={CDP_PORT}",
             f"--user-data-dir={PW_USERDATA}",
             "--window-size=1280,900",
         ],
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stderr=open(_stderr_tmp.name, "w"),
         env=env,
     )
     print(f"🖥️ Chromium gestartet (PID={proc.pid})")
@@ -270,7 +280,23 @@ def run_freenet_download(headless=True, month_offset=0):
     try:
         exit_code = proc.poll()
         if exit_code is not None:
-            raise RuntimeError(f"Chromium sofort beendet (exit={exit_code}) — CDP nicht verfügbar")
+            try:
+                with open(_stderr_tmp.name) as f:
+                    stderr_tail = f.read()[-1500:].strip()
+            except Exception:
+                stderr_tail = "(stderr nicht lesbar)"
+            finally:
+                try:
+                    os.unlink(_stderr_tmp.name)
+                except Exception:
+                    pass
+            raise RuntimeError(
+                f"Chromium sofort beendet (exit={exit_code}):\n{stderr_tail}"
+            )
+        try:
+            os.unlink(_stderr_tmp.name)
+        except Exception:
+            pass
         print(f"✅ Chromium läuft (PID={proc.pid}), verbinde CDP...")
         with sync_playwright() as p:
             try:
