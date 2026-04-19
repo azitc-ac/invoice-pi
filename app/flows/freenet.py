@@ -265,6 +265,7 @@ def run_freenet_download(headless=True, month_offset=0):
             "--no-sandbox",
             "--disable-dev-shm-usage",
             "--disable-gpu",
+            "--ozone-platform=x11",
             "--disable-blink-features=AutomationControlled",
             f"--remote-debugging-port={CDP_PORT}",
             f"--user-data-dir={PW_USERDATA}",
