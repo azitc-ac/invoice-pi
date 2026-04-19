@@ -235,6 +235,9 @@ def run_freenet_download(headless=True, month_offset=0):
     )
     time.sleep(2)
 
+    if not os.path.exists(CHROMIUM_BIN):
+        raise RuntimeError(f"Chromium Binary nicht gefunden: {CHROMIUM_BIN}")
+
     proc = subprocess.Popen(
         [
             CHROMIUM_BIN,
@@ -249,11 +252,14 @@ def run_freenet_download(headless=True, month_offset=0):
         stderr=subprocess.DEVNULL,
         env=env,
     )
+    print(f"🖥️ Chromium gestartet (PID={proc.pid})")
     time.sleep(3)
-    if proc.poll() is not None:
-        raise RuntimeError(f"Chromium sofort beendet (exit={proc.poll()}) — CDP nicht verfügbar")
 
     try:
+        exit_code = proc.poll()
+        if exit_code is not None:
+            raise RuntimeError(f"Chromium sofort beendet (exit={exit_code}) — CDP nicht verfügbar")
+        print(f"✅ Chromium läuft (PID={proc.pid}), verbinde CDP...")
         with sync_playwright() as p:
             try:
                 browser = p.chromium.connect_over_cdp(f"http://localhost:{CDP_PORT}")
