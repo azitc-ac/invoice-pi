@@ -217,7 +217,16 @@ def run_freenet_download(headless=True, month_offset=0):
             time.sleep(2)
 
             _dismiss_cookie_banner(page)
-            _login(page)
+
+            current_url = page.evaluate("window.location.href")
+            print(f"📍 URL nach Navigation: {current_url}")
+
+            login_indicators = ["login", "signin", "auth", "id.freenet.de"]
+            if any(x in current_url.lower() for x in login_indicators):
+                print("🔐 Login erforderlich...")
+                _login(page)
+            else:
+                print("✅ Bereits eingeloggt (Session noch aktiv)")
 
             page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-01-logged-in.png")
 
