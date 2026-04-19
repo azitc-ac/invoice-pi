@@ -25,25 +25,54 @@ MONTH_MAP = {
 
 
 def _dismiss_cookie_banner(page, total_wait=10):
-    """Wartet bis zu total_wait Sekunden auf Cookie-Banner und klickt ihn weg."""
-    selectors = [
-        "button#onetrust-accept-btn-handler",
-        "button.onetrust-accept-btn-handler",
+    """Wartet bis zu total_wait Sekunden auf Cookie-Banner und klickt ihn weg.
+
+    Freenet nutzt Sourcepoint — der Banner liegt in einem sp_message_iframe,
+    nicht direkt auf der Seite. Daher wird zuerst in Iframes gesucht.
+    """
+    # Sourcepoint / Freenet: Banner in einem Consent-Iframe
+    iframe_selectors = [
+        "iframe[id^='sp_message_iframe']",
+        "iframe[title='SP Consent Message']",
+        "iframe[title*='Consent']",
+        "iframe[title*='Datenschutz']",
+        "iframe[src*='privacy-mgmt']",
+    ]
+    button_selectors = [
         "button:has-text('Alle akzeptieren')",
         "button:has-text('Akzeptieren')",
         "button:has-text('Zustimmen')",
+        "button:has-text('Einverstanden')",
+        "button#onetrust-accept-btn-handler",
+        "button.onetrust-accept-btn-handler",
         "button:has-text('Accept all')",
         "button:has-text('Accept')",
-        "button:has-text('Einverstanden')",
         "[id*='accept'][id*='cookie']",
         "[class*='accept'][class*='cookie']",
     ]
     deadline = time.time() + total_wait
     while time.time() < deadline:
-        for sel in selectors:
+        # Zuerst in SP-Iframes suchen (Freenet / Sourcepoint)
+        for iframe_sel in iframe_selectors:
+            try:
+                frame = page.frame_locator(iframe_sel)
+                for btn_sel in button_selectors:
+                    try:
+                        btn = frame.locator(btn_sel).first
+                        if btn.is_visible(timeout=500):
+                            btn.click()
+                            print(f"🍪 Cookie-Banner (iframe) weggeklickt ({btn_sel})")
+                            time.sleep(1)
+                            return
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+        # Fallback: direkt auf der Seite (OneTrust / NetAachen)
+        for sel in button_selectors:
             try:
                 btn = page.locator(sel).first
-                if btn.is_visible(timeout=500):
+                if btn.is_visible(timeout=300):
                     btn.click()
                     print(f"🍪 Cookie-Banner weggeklickt ({sel})")
                     time.sleep(1)
