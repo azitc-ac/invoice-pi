@@ -225,9 +225,10 @@ def run_freenet_download(headless=True, month_offset=0):
 
     env = {**os.environ, "DISPLAY": ":0"}
 
-    # Ensure a window manager is running — Chromium needs one on the virtual display
+    # Start window manager via shell — no exception if fluxbox is absent
     subprocess.Popen(
-        ["fluxbox", "-display", ":0"],
+        "fluxbox -display :0",
+        shell=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         env=env,
