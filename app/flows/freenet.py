@@ -24,7 +24,8 @@ MONTH_MAP = {
 }
 
 
-def _dismiss_cookie_banner(page):
+def _dismiss_cookie_banner(page, total_wait=10):
+    """Wartet bis zu total_wait Sekunden auf Cookie-Banner und klickt ihn weg."""
     selectors = [
         "button#onetrust-accept-btn-handler",
         "button.onetrust-accept-btn-handler",
@@ -37,16 +38,20 @@ def _dismiss_cookie_banner(page):
         "[id*='accept'][id*='cookie']",
         "[class*='accept'][class*='cookie']",
     ]
-    for sel in selectors:
-        try:
-            btn = page.locator(sel).first
-            if btn.is_visible(timeout=1500):
-                btn.click()
-                print(f"🍪 Cookie-Banner weggeklickt ({sel})")
-                time.sleep(1)
-                return
-        except Exception:
-            continue
+    deadline = time.time() + total_wait
+    while time.time() < deadline:
+        for sel in selectors:
+            try:
+                btn = page.locator(sel).first
+                if btn.is_visible(timeout=500):
+                    btn.click()
+                    print(f"🍪 Cookie-Banner weggeklickt ({sel})")
+                    time.sleep(1)
+                    return
+            except Exception:
+                continue
+        time.sleep(0.5)
+    print("ℹ️ Kein Cookie-Banner gefunden")
 
 
 def _handle_cloudflare(page, timeout=25):
@@ -190,6 +195,16 @@ def run_freenet_download(headless=True, month_offset=0):
     time.sleep(1)
 
     env = {**os.environ, "DISPLAY": ":0"}
+
+    # Ensure a window manager is running — Chromium needs one on the virtual display
+    subprocess.Popen(
+        ["fluxbox", "-display", ":0"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env=env,
+    )
+    time.sleep(2)
+
     proc = subprocess.Popen(
         [
             CHROMIUM_BIN,
@@ -205,18 +220,21 @@ def run_freenet_download(headless=True, month_offset=0):
         env=env,
     )
     time.sleep(3)
+    if proc.poll() is not None:
+        raise RuntimeError(f"Chromium sofort beendet (exit={proc.poll()}) — CDP nicht verfügbar")
 
     try:
         with sync_playwright() as p:
-            browser = p.chromium.connect_over_cdp(f"http://localhost:{CDP_PORT}")
+            try:
+                browser = p.chromium.connect_over_cdp(f"http://localhost:{CDP_PORT}")
+            except Exception as e:
+                raise RuntimeError(f"CDP-Verbindung auf Port {CDP_PORT} fehlgeschlagen: {e}")
             ctx = browser.contexts[0] if browser.contexts else browser.new_context()
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
 
             print(f"📖 Navigiere zu {LOGIN_URL}")
             page.goto(LOGIN_URL, wait_until="domcontentloaded")
             time.sleep(2)
-
-            _dismiss_cookie_banner(page)
 
             current_url = page.evaluate("window.location.href")
             print(f"📍 URL nach Navigation: {current_url}")
@@ -227,6 +245,10 @@ def run_freenet_download(headless=True, month_offset=0):
                 _login(page)
             else:
                 print("✅ Bereits eingeloggt (Session noch aktiv)")
+
+            # Cookie-Banner: erscheint erst nach vollständigem JS-Rendering
+            print("🍪 Warte auf Cookie-Banner...")
+            _dismiss_cookie_banner(page, total_wait=10)
 
             page.screenshot(path=f"{DOWNLOAD_DIR}/freenet-01-logged-in.png")
 
