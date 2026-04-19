@@ -290,9 +290,8 @@ def run_freenet_download(headless=True, month_offset=0):
                     os.unlink(_stderr_tmp.name)
                 except Exception:
                     pass
-            raise RuntimeError(
-                f"Chromium sofort beendet (exit={exit_code}):\n{stderr_tail}"
-            )
+            print(f"❌ Chromium sofort beendet (exit={exit_code}):\n{stderr_tail}", flush=True)
+            raise RuntimeError(f"Chromium sofort beendet (exit={exit_code})")
         try:
             os.unlink(_stderr_tmp.name)
         except Exception:
