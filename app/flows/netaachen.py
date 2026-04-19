@@ -73,7 +73,7 @@ def _login(page):
             "   && !window.location.href.includes('cas/login')",
             timeout=30000,
         )
-        print(f"✅ Login erfolgreich: {page.evaluate('window.location.href')}")
+        print(f"✅ Login erfolgreich: {page.url}")
     except Exception as e:
         raise RuntimeError(f"Login fehlgeschlagen oder Timeout: {e}")
     time.sleep(2)
@@ -119,7 +119,7 @@ def run_netaachen_download(headless=True, month_offset=0):
 
     for lock_file in ["SingletonLock", "SingletonCookie", "SingletonSocket"]:
         lock_path = os.path.join(PW_USERDATA, lock_file)
-        if os.path.exists(lock_path):
+        if os.path.lexists(lock_path):
             os.remove(lock_path)
             print(f"🧹 Lock entfernt: {lock_path}")
 
@@ -201,6 +201,3 @@ def run_netaachen_download(headless=True, month_offset=0):
             raise RuntimeError("PDF-Download fehlgeschlagen!")
 
 
-def run_netaachen_keepalive():
-    """Nicht mehr benötigt — NetAachen nutzt jetzt Fresh Login."""
-    print("ℹ️ NetAachen Keep-Alive übersprungen (Fresh-Login-Modus aktiv)")

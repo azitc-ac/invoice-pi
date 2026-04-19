@@ -3,9 +3,8 @@ from fastapi.responses import JSONResponse, FileResponse, HTMLResponse, Streamin
 import json as _json
 from pydantic import BaseModel
 from typing import List, Optional
-from contextlib import asynccontextmanager
-from flows.freenet import run_freenet_download, run_freenet_keepalive
-from flows.netaachen import run_netaachen_download, run_netaachen_keepalive
+from flows.freenet import run_freenet_download
+from flows.netaachen import run_netaachen_download
 from flows.lexware import run_lexware_upload
 from flows.analyze import analyze_invoice, _extract_text_both
 import os
@@ -16,39 +15,8 @@ import glob
 import shutil
 import tempfile
 import traceback
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
 
-scheduler = AsyncIOScheduler()
-
-async def _scheduled_freenet_keepalive():
-    print("⏰ Geplanter Freenet Keep-Alive gestartet (08:00)")
-    try:
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, run_freenet_keepalive)
-        print("✅ Geplanter Freenet Keep-Alive erfolgreich")
-    except Exception as e:
-        print(f"⚠️ Geplanter Freenet Keep-Alive fehlgeschlagen: {e}")
-
-async def _scheduled_netaachen_keepalive():
-    print("⏰ Geplanter NetAachen Keep-Alive gestartet (08:00)")
-    try:
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, run_netaachen_keepalive)
-        print("✅ Geplanter NetAachen Keep-Alive erfolgreich")
-    except Exception as e:
-        print(f"⚠️ Geplanter NetAachen Keep-Alive fehlgeschlagen: {e}")
-
-@asynccontextmanager
-async def lifespan(app):
-    scheduler.add_job(_scheduled_freenet_keepalive, CronTrigger(hour=8, minute=0))
-    scheduler.add_job(_scheduled_netaachen_keepalive, CronTrigger(hour=8, minute=5))
-    scheduler.start()
-    print("⏰ Scheduler gestartet — Keep-Alive täglich um 08:00 (Freenet) und 08:05 (NetAachen)")
-    yield
-    scheduler.shutdown()
-
-app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 
 lexware_lock = asyncio.Lock()
 
@@ -118,7 +86,7 @@ def cleanup_locks():
     for site, userdir in PW_USERDIRS.items():
         for lf in LOCK_FILES:
             path = os.path.join(userdir, lf)
-            if os.path.exists(path):
+            if os.path.lexists(path):
                 os.remove(path)
                 removed.append(path)
                 print(f"🧹 Lock entfernt: {path}")
@@ -174,16 +142,6 @@ def stop_vnc_services():
 
 def check_debug_mode():
     return get_supervisor_status("novnc") and get_supervisor_status("xvfb")
-
-def _ensure_display_services():
-    """Startet Xvfb, fluxbox, x11vnc und noVNC falls nicht aktiv."""
-    for svc in ["xvfb", "fluxbox", "x11vnc", "novnc"]:
-        if not get_supervisor_status(svc):
-            try:
-                import subprocess
-                subprocess.run(f"supervisorctl start {svc}", shell=True, capture_output=True)
-            except Exception:
-                pass
 
 def get_vnc_url(request: Request) -> str:
     host = request.headers.get("host", "localhost").split(":")[0]
@@ -691,24 +649,6 @@ def session_init(req: DownloadRequest, request: Request):
 @app.get("/health")
 def health():
     return {"status": "ok"}
-
-@app.post("/keepalive/freenet")
-async def keepalive_freenet():
-    try:
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, run_freenet_keepalive)
-        return {"status": "ok", "message": "Freenet Session erfolgreich aktualisiert"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/keepalive/netaachen")
-async def keepalive_netaachen():
-    try:
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, run_netaachen_keepalive)
-        return {"status": "ok", "message": "NetAachen Session erfolgreich aktualisiert"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/debug/status")
 def debug_status(request: Request):

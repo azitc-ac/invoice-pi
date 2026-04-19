@@ -83,41 +83,48 @@ def _dismiss_cookie_banner(page, total_wait=10):
     print("ℹ️ Kein Cookie-Banner gefunden")
 
 
-def _handle_cloudflare(page, timeout=25):
-    """Klickt Cloudflare 'Ich bin kein Roboter' Checkbox falls vorhanden."""
+def _handle_cloudflare(page, timeout=60):
+    """Aktiviert Cloudflare Turnstile per Tastatur (Tab×4 + Space).
+
+    Wartet zuerst bis der Spinner fertig ist und die Checkbox erscheint.
+    Strategie: Frame erkennen, dann auf Submit-Button-Aktivierung warten
+    (auto-solve). Bleibt er disabled, ist die Checkbox sichtbar → Tab×4+Space.
+    """
     print("🛡️ Prüfe auf Cloudflare-Challenge...")
-    iframe_selectors = [
-        "iframe[src*='challenges.cloudflare.com']",
-        "iframe[src*='cloudflare.com']",
-        "iframe[title*='Widget']",
-        "iframe[title*='challenge']",
-    ]
-    element_selectors = [
-        "input[type='checkbox']",
-        "label.ctp-checkbox-label",
-        ".ctp-checkbox-label",
-        "span.mark",
-    ]
     deadline = time.time() + timeout
+
+    # Phase 1: Warten bis Turnstile-Frame erscheint
     while time.time() < deadline:
-        for iframe_sel in iframe_selectors:
-            try:
-                frame = page.frame_locator(iframe_sel)
-                for el_sel in element_selectors:
-                    try:
-                        el = frame.locator(el_sel).first
-                        if el.is_visible(timeout=1000):
-                            el.click()
-                            print("✅ Cloudflare-Checkbox geklickt!")
-                            time.sleep(3)
-                            return True
-                    except Exception:
-                        continue
-            except Exception:
-                continue
+        if any("challenges.cloudflare.com" in f.url for f in page.frames):
+            print("  Turnstile-Frame erkannt, warte auf Checkbox (Spinner läuft)...")
+            break
         time.sleep(0.5)
-    print("ℹ️ Keine Cloudflare-Challenge erkannt")
-    return False
+    else:
+        print("ℹ️ Keine Cloudflare-Challenge erkannt")
+        return False
+
+    # Phase 2: Warten ob Turnstile auto-löst (Submit-Button wird enabled)
+    # Gleichzeitig: wenn nach 30s noch disabled → Checkbox muss sichtbar sein
+    wait_deadline = min(time.time() + 35, deadline)
+    while time.time() < wait_deadline:
+        try:
+            btn = page.locator("button[type='submit']")
+            if btn.get_attribute("disabled", timeout=500) is None:
+                print("✅ Turnstile auto-gelöst, Submit-Button aktiv")
+                return True
+        except Exception:
+            pass
+        time.sleep(1)
+
+    # Phase 3: Checkbox sollte jetzt sichtbar sein → Tab×4 + Space
+    print("  Spinner fertig → Tab×4 + Space")
+    for _ in range(4):
+        page.keyboard.press("Tab")
+        time.sleep(0.3)
+    page.keyboard.press("Space")
+    time.sleep(2)
+    print("✅ Turnstile per Tastatur aktiviert")
+    return True
 
 
 def _login(page):
@@ -134,6 +141,8 @@ def _login(page):
     _handle_cloudflare(page)
 
     try:
+        print("⏳ Warte auf aktivierten Submit-Button...")
+        page.wait_for_selector("button[type='submit']:not([disabled])", timeout=15000)
         page.click("button[type='submit']", timeout=5000)
     except Exception as e:
         print(f"⚠️ Submit-Button: {e}")
@@ -145,7 +154,7 @@ def _login(page):
             "   && !window.location.href.includes('id.freenet')",
             timeout=30000,
         )
-        print(f"✅ Login erfolgreich: {page.evaluate('window.location.href')}")
+        print(f"✅ Login erfolgreich: {page.url}")
     except Exception as e:
         raise RuntimeError(f"Login fehlgeschlagen oder Timeout: {e}")
     time.sleep(2)
@@ -213,7 +222,7 @@ def run_freenet_download(headless=True, month_offset=0):
 
     for lock_file in ["SingletonLock", "SingletonCookie", "SingletonSocket"]:
         lock_path = os.path.join(PW_USERDATA, lock_file)
-        if os.path.exists(lock_path):
+        if os.path.lexists(lock_path):
             os.remove(lock_path)
             print(f"🧹 Lock entfernt: {lock_path}")
 
@@ -277,6 +286,8 @@ def run_freenet_download(headless=True, month_offset=0):
             "--disable-gpu",
             "--ozone-platform=x11",
             "--disable-blink-features=AutomationControlled",
+            "--user-agent=Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+            "--lang=de-DE",
             f"--remote-debugging-port={CDP_PORT}",
             f"--user-data-dir={PW_USERDATA}",
             "--window-size=1280,900",
@@ -317,10 +328,17 @@ def run_freenet_download(headless=True, month_offset=0):
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
 
             print(f"📖 Navigiere zu {LOGIN_URL}")
-            page.goto(LOGIN_URL, wait_until="domcontentloaded")
-            time.sleep(2)
+            page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=30000)
+            # JS-Redirect zu id.freenet.de abwarten
+            try:
+                page.wait_for_url(
+                    lambda url: "id.freenet" in url or "meine-rechnungen" in url,
+                    timeout=15000,
+                )
+            except Exception:
+                pass
 
-            current_url = page.evaluate("window.location.href")
+            current_url = page.url
             print(f"📍 URL nach Navigation: {current_url}")
 
             login_indicators = ["login", "signin", "auth", "id.freenet.de"]
@@ -368,6 +386,3 @@ def run_freenet_download(headless=True, month_offset=0):
         print("✅ Chromium beendet")
 
 
-def run_freenet_keepalive():
-    """Nicht mehr benötigt — Freenet nutzt jetzt Fresh Login."""
-    print("ℹ️ Freenet Keep-Alive übersprungen (Fresh-Login-Modus aktiv)")
