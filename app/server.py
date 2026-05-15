@@ -8,13 +8,104 @@ from flows.netaachen import run_netaachen_download
 from flows.lexware import run_lexware_upload
 from flows.analyze import analyze_invoice, _extract_text_both
 import os
+import re
 import subprocess
+import sys
 import time
 import asyncio
 import glob
 import shutil
 import tempfile
 import traceback
+
+
+# ============================================================
+# STDOUT WRAPPER — Zeitstempel + monatliches App-Log
+# ============================================================
+
+class _TimestampWriter:
+    """Wraps sys.stdout: prepends timestamp to every line.
+
+    Additionally writes each line to /var/log/supervisor/app-YYYY-MM.log,
+    skipping uvicorn INFO noise (access logs, startup messages).
+    """
+
+    _INFO_PREFIXES = (
+        "INFO:     ",       # uvicorn startup/access format
+        "INFO:uvicorn",
+        "INFO:httpx",
+        "INFO:asyncio",
+    )
+
+    def __init__(self, underlying, log_dir: str = "/var/log/supervisor"):
+        self._out = underlying
+        self._log_dir = log_dir
+        self._buf = ""
+        self._month: str | None = None
+        self._file = None
+
+    def _log_file(self):
+        from datetime import datetime as _dt
+        m = _dt.now().strftime("%Y-%m")
+        if m != self._month:
+            if self._file:
+                try:
+                    self._file.close()
+                except Exception:
+                    pass
+            self._file = open(
+                os.path.join(self._log_dir, f"app-{m}.log"), "a", encoding="utf-8"
+            )
+            self._month = m
+        return self._file
+
+    def _emit(self, line: str):
+        line = line.rstrip()
+        if not line:
+            self._out.write("\n")
+            return
+        from datetime import datetime as _dt
+        stamped = f"{_dt.now().strftime('%Y-%m-%d_%H:%M:%S')} - {line}\n"
+        self._out.write(stamped)
+        if not any(line.startswith(p) for p in self._INFO_PREFIXES):
+            try:
+                f = self._log_file()
+                f.write(stamped)
+                f.flush()
+            except Exception:
+                pass
+
+    def write(self, text: str):
+        self._buf += text
+        while "\n" in self._buf:
+            line, self._buf = self._buf.split("\n", 1)
+            self._emit(line)
+
+    def flush(self):
+        self._out.flush()
+
+    def fileno(self):
+        return self._out.fileno()
+
+    def isatty(self):
+        return False
+
+
+if not isinstance(sys.stdout, _TimestampWriter):
+    _orig_stdout = sys.stdout
+    sys.stdout = _TimestampWriter(_orig_stdout)
+    # Patch existing logging StreamHandlers that still hold the original stdout reference
+    # (uvicorn configures logging before importing server.py, so handlers are already set up)
+    import logging as _logging
+    for _h in list(_logging.root.handlers):
+        if isinstance(_h, _logging.StreamHandler) and getattr(_h, "stream", None) is _orig_stdout:
+            _h.stream = sys.stdout
+    for _logger in _logging.Logger.manager.loggerDict.values():
+        if isinstance(_logger, _logging.Logger):
+            for _h in list(_logger.handlers):
+                if isinstance(_h, _logging.StreamHandler) and getattr(_h, "stream", None) is _orig_stdout:
+                    _h.stream = sys.stdout
+
 
 app = FastAPI()
 
@@ -64,41 +155,6 @@ async def api_key_middleware(request: Request, call_next):
 class DownloadRequest(BaseModel):
     site: str
     month_offset: int = 0
-    save_session: bool = True
-
-
-# ============================================================
-# API ENDPOINT - Cleanup Locks
-# ============================================================
-
-PW_USERDIRS = {
-    "freenet": os.getenv("PW_USERDATA_FREENET", "/pwdata/freenet"),
-    "netaachen": os.getenv("PW_USERDATA_NETAACHEN", "/pwdata/netaachen"),
-    "lexware": os.getenv("PW_USERDATA_LEXWARE", "/pwdata/lexware"),
-}
-FF_PROFILE_LEXWARE = os.getenv("FF_PROFILE_LEXWARE", "/pwdata/lexware-ff")
-LOCK_FILES = ["SingletonLock", "SingletonCookie", "SingletonSocket"]
-
-@app.post("/cleanup/locks")
-def cleanup_locks():
-    """Entfernt stale Chromium Lock-Dateien und killt verwaiste Prozesse"""
-    removed = []
-    for site, userdir in PW_USERDIRS.items():
-        for lf in LOCK_FILES:
-            path = os.path.join(userdir, lf)
-            if os.path.lexists(path):
-                os.remove(path)
-                removed.append(path)
-                print(f"🧹 Lock entfernt: {path}")
-
-    try:
-        subprocess.run(["pkill", "-f", "chromium"], capture_output=True)
-        print("🧹 Chromium-Prozesse beendet")
-    except Exception:
-        pass
-
-    msg = f"{len(removed)} Lock(s) entfernt" if removed else "Keine Locks gefunden"
-    return {"status": "ok", "message": msg, "removed": removed}
 
 
 # ============================================================
@@ -351,7 +407,7 @@ ANTI_DETECTION_SCRIPT = """
     );
 """
 
-def _open_browser_for_login(site: str, save_session: bool = True):
+def _open_browser_for_login(site: str):
     """
     Öffnet Chromium via CDP (navigator.webdriver=false) für Session-Login.
     Freenet/NetAachen: Credentials vorausgefüllt, manuell Anmelden klicken.
@@ -530,23 +586,13 @@ return findAndClick(document);
                     print(f"⚠️  Download-Fehler: {e}")
             page.on("download", _on_download)
 
-            # Download-Events loggen
-            def _on_download(dl):
-                print(f"📥 Download gestartet: {dl.suggested_filename}")
-                try:
-                    dl.save_as(os.path.join(download_dir, dl.suggested_filename))
-                    print(f"✅ Download gespeichert: {download_dir}/{dl.suggested_filename}")
-                except Exception as e:
-                    print(f"⚠️  Download-Fehler: {e}")
-            page.on("download", _on_download)
-
             if cfg["fill_username"]:
                 print(f"👉 Bitte jetzt auf Anmelden klicken!")
             else:
                 print(f"👉 Bitte manuell einloggen (User: {cfg['username']})")
 
-            timeout_sec = 3600 if not save_session else 600
-            print(f"⏳ Warte auf Login (max {'60' if not save_session else '10'} Minuten)...")
+            timeout_sec = 3600
+            print(f"⏳ Warte auf Login (max 60 Minuten)...")
 
             # Warten bis eingeloggt
             deadline = time.time() + timeout_sec
@@ -563,51 +609,35 @@ return findAndClick(document);
                 time.sleep(5)
 
             if logged_in:
-                if save_session:
-                    print(f"⏳ Warte 15s damit Cookies gespeichert werden...")
-                    time.sleep(15)
-                    storage_path = os.path.join(cfg["userdata"], "playwright-storage.json")
-                    os.makedirs(cfg["userdata"], exist_ok=True)
+                print(f"✅ Eingeloggt — Browser bleibt offen...")
+                import glob as _glob
+                known_files = set()
+                wait_end = time.time() + 3600
+                while time.time() < wait_end:
+                    for pattern in [
+                        os.path.join(profile_dir, "*.pdf"),
+                        os.path.join(profile_dir, "*.PDF"),
+                        os.path.join(profile_dir, "Default", "*.pdf"),
+                    ]:
+                        for f_path in _glob.glob(pattern):
+                            if f_path not in known_files and not f_path.endswith(".crdownload"):
+                                known_files.add(f_path)
+                                fname = os.path.basename(f_path)
+                                dest = os.path.join(download_dir, fname)
+                                try:
+                                    import shutil as _sh
+                                    _sh.copy2(f_path, dest)
+                                    print(f"📥 Download kopiert: {fname} → {download_dir}")
+                                except Exception as e:
+                                    print(f"⚠️  Kopieren fehlgeschlagen: {e}")
                     try:
-                        ctx.storage_state(path=storage_path)
-                        print(f"✅ Storage State gespeichert: {storage_path}")
-                    except Exception as e:
-                        print(f"⚠️  Storage State: {e}")
-                else:
-                    print(f"✅ Eingeloggt (ohne Session-Speicherung) — Browser bleibt offen...")
-                    # Warten und dabei Downloads überwachen
-                    import glob as _glob
-                    known_files = set()
-                    wait_end = time.time() + 3600
-                    while time.time() < wait_end:
-                        # Downloads aus Chrome-Profil nach /downloads kopieren
-                        chrome_dl = os.path.join(profile_dir, "Default", "Downloads")
-                        # Auch direkt im profile_dir suchen
-                        for pattern in [
-                            os.path.join(profile_dir, "*.pdf"),
-                            os.path.join(profile_dir, "*.PDF"),
-                            os.path.join(profile_dir, "Default", "*.pdf"),
-                        ]:
-                            for f_path in _glob.glob(pattern):
-                                if f_path not in known_files and not f_path.endswith(".crdownload"):
-                                    known_files.add(f_path)
-                                    fname = os.path.basename(f_path)
-                                    dest = os.path.join(download_dir, fname)
-                                    try:
-                                        import shutil as _sh
-                                        _sh.copy2(f_path, dest)
-                                        print(f"📥 Download kopiert: {fname} → {download_dir}")
-                                    except Exception as e:
-                                        print(f"⚠️  Kopieren fehlgeschlagen: {e}")
-                        # Abbrechen wenn Browser geschlossen wurde
-                        try:
-                            _ = page.evaluate("1")
-                        except Exception:
-                            print(f"🔒 Browser geschlossen — Session-Modus beendet")
-                            break
-                        time.sleep(3)
+                        _ = page.evaluate("1")
+                    except Exception:
+                        print(f"🔒 Browser geschlossen — Modus beendet")
+                        break
+                    time.sleep(3)
             else:
-                print(f"⚠️  Login-Timeout — Session nicht gespeichert")
+                print(f"⚠️  Login-Timeout — Browser wird geschlossen")
 
             browser.close()
 
@@ -630,7 +660,7 @@ def session_init(req: DownloadRequest, request: Request):
     if site not in ("freenet", "netaachen", "lexware"):
         raise HTTPException(status_code=400, detail="Unsupported site")
 
-    thread = threading.Thread(target=_open_browser_for_login, args=(site, req.save_session), daemon=True)
+    thread = threading.Thread(target=_open_browser_for_login, args=(site,), daemon=True)
     thread.start()
 
     return {
@@ -638,7 +668,7 @@ def session_init(req: DownloadRequest, request: Request):
         "site": site,
         "message": "Browser geöffnet, Credentials vorausgefüllt. Bitte manuell auf Anmelden klicken.",
         "vnc_url": get_vnc_url(request),
-        "timeout_minutes": 5,
+        "timeout_minutes": 60,
     }
 
 
@@ -780,6 +810,36 @@ def find_log_file() -> str | None:
     matches = glob.glob("/var/log/supervisor/fastapi-stdout---supervisor-*.log")
     return matches[0] if matches else None
 
+
+# ============================================================
+# API ENDPOINTS - Log Download
+# ============================================================
+
+@app.get("/logs/list")
+def list_logs():
+    """Verfügbare monatliche App-Logs auflisten."""
+    from datetime import datetime
+    files = sorted(glob.glob("/var/log/supervisor/app-????-??.log"), reverse=True)
+    result = []
+    for f in files:
+        name = os.path.basename(f)
+        month = name[4:-4]  # "app-2026-05.log" → "2026-05"
+        result.append({"month": month, "filename": name, "size": os.path.getsize(f)})
+    current = datetime.now().strftime("%Y-%m")
+    return {"logs": result, "current_month": current}
+
+@app.get("/logs/download")
+def download_log(month: str = ""):
+    """Monatliches App-Log herunterladen (Standard: aktueller Monat)."""
+    from datetime import datetime
+    if not month:
+        month = datetime.now().strftime("%Y-%m")
+    log_path = f"/var/log/supervisor/app-{month}.log"
+    if not os.path.isfile(log_path):
+        raise HTTPException(status_code=404, detail=f"Log für {month} nicht gefunden")
+    return FileResponse(log_path, filename=f"invoice-pi-app-{month}.log", media_type="text/plain")
+
+
 @app.websocket("/ws/logs")
 async def ws_logs(websocket: WebSocket, api_key: str = ""):
     if API_KEY and api_key != API_KEY:
@@ -797,11 +857,15 @@ async def ws_logs(websocket: WebSocket, api_key: str = ""):
     try:
         from datetime import datetime
 
+        _TS_RE = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{2}:\d{2}:\d{2} - ")
+
         def ts(line: str) -> str:
-            """Zeitstempel prependen falls Zeile nicht leer."""
+            """Zeitstempel prependen — nur wenn Zeile noch keinen hat."""
             line = line.strip()
             if not line:
                 return line
+            if _TS_RE.match(line):
+                return line  # stdout-Wrapper hat bereits gestempelt
             return f"{datetime.now().strftime('%Y-%m-%d_%H:%M:%S')} - {line}"
 
         proc = await asyncio.create_subprocess_exec(

@@ -129,6 +129,10 @@ INVOICE_NR_PATTERNS = [
 
     # Pieksauber
     r"(RECH\d{8})",
+
+    # Apple
+    r"DOKUMENT-NR\.?\s*([A-Z0-9\-]{4,30})",
+    r"Dokument[:\s]+([A-Z0-9\-]{4,30})",
 ]
 
 AMOUNT_PATTERNS = [

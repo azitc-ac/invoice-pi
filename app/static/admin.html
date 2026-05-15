@@ -174,7 +174,7 @@
 <body>
 
 <header>
-  <div class="logo">invoice<span>-pi</span> · admin <span class="logo-ver">v1.4</span></div>
+  <div class="logo">invoice<span>-pi</span> · admin <span class="logo-ver">v1.5</span></div>
   <div class="header-debug">
     <label class="toggle-switch" style="width:36px;height:20px;">
       <input type="checkbox" id="debug-toggle">
@@ -203,18 +203,14 @@
 
       <!-- SESSION -->
       <div>
-        <div class="section-label">Session speichern</div>
+        <div class="section-label">Manueller Login</div>
         <div class="card">
-          <div class="card-title">Manueller Login (einmalig)</div>
-          <div class="card-hint">Debug mode (VNC) muss aktiv sein.<br>Session wird gespeichert.</div>
+          <div class="card-title">Browser öffnen (einmalig)</div>
+          <div class="card-hint">Debug mode (VNC) muss aktiv sein.<br>Frische Session — nichts wird gespeichert.</div>
           <select id="session-site">
             <option value="freenet">Freenet</option>
             <option value="netaachen">NetAachen</option>
           </select>
-          <div class="check-row">
-            <input type="checkbox" id="session-save-check" checked>
-            <label for="session-save-check">Session speichern</label>
-          </div>
           <button class="btn btn-primary" id="btn-session" onclick="initSession()" disabled>
             <span class="btn-icon">🔐</span>
             <div class="spinner"></div>
@@ -248,20 +244,6 @@
         </div>
       </div>
 
-      <!-- WARTUNG -->
-      <div>
-        <div class="section-label">Wartung</div>
-        <div class="card">
-          <div class="card-title">Browser-Locks aufräumen</div>
-          <div class="card-hint">Wenn ein Download hängt oder "profile in use" Fehler auftritt.</div>
-          <button class="btn btn-primary" id="btn-cleanup" onclick="cleanupLocks()">
-            <span class="btn-icon">🧹</span>
-            <div class="spinner"></div>
-            Locks aufräumen
-          </button>
-        </div>
-      </div>
-
       <div style="flex:1"></div>
       <div style="font-family:var(--mono);font-size:10px;color:var(--border);text-align:center;padding-bottom:8px;">invoice-pi · fastapi + playwright</div>
     </div>
@@ -271,10 +253,10 @@
 
       <!-- SESSION LEXWARE -->
       <div>
-        <div class="section-label">Lexware Session</div>
+        <div class="section-label">Manueller Login</div>
         <div class="card">
-          <div class="card-title">Manueller Login (einmalig)</div>
-          <div class="card-hint">Debug mode (VNC) muss aktiv sein.<br>Session wird gespeichert.</div>
+          <div class="card-title">Browser öffnen (einmalig)</div>
+          <div class="card-hint">Debug mode (VNC) muss aktiv sein.<br>Frische Session — nichts wird gespeichert.</div>
           <button class="btn btn-purple" id="btn-lexware-session" onclick="initLexwareSession()" disabled>
             <span class="btn-icon">🔐</span>
             <div class="spinner"></div>
@@ -407,6 +389,7 @@
       <div class="log-title">fastapi-stdout</div>
       <div class="log-badge" id="ws-badge">off</div>
       <div class="log-controls">
+        <button class="icon-btn" onclick="downloadCurrentLog()" title="Monatliches App-Log herunterladen">⬇ log</button>
         <button class="icon-btn" onclick="clearLog()">clear</button>
         <button class="icon-btn" id="autoscroll-btn" onclick="toggleAutoscroll()">autoscroll ✓</button>
         <button class="icon-btn" id="verbose-btn" onclick="toggleVerbose()">verbose ✗</button>
@@ -583,7 +566,6 @@
   // ── SESSION INIT ──────────────────────────────────────────
   async function initSession() {
     const site = document.getElementById('session-site').value;
-    const saveSession = document.getElementById('session-save-check').checked;
     const btn = document.getElementById('btn-session');
     if (!debugActive) { toast('Debug mode (VNC) muss aktiv sein!', 'error'); return; }
     setLoading(btn, true);
@@ -592,10 +574,10 @@
       const r = await fetch(`${API}/session/init`, {
         method: 'POST',
         headers: authHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ site, save_session: saveSession })
+        body: JSON.stringify({ site })
       });
       const d = await r.json();
-      if (r.ok) toast(`Browser geöffnet für ${site}${saveSession ? ' — Session wird gespeichert' : ' — nur Ansicht'}`, 'success');
+      if (r.ok) toast(`Browser geöffnet für ${site} — frische Session`, 'success');
       else toast(d.detail || 'Fehler', 'error');
     } catch (err) {
       toast('Fehler: ' + err.message, 'error');
@@ -613,10 +595,10 @@
       const r = await fetch(`${API}/session/init`, {
         method: 'POST',
         headers: authHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ site: 'lexware', save_session: true })
+        body: JSON.stringify({ site: 'lexware' })
       });
       const d = await r.json();
-      if (r.ok) toast('Lexware Browser geöffnet — bitte einloggen', 'upload');
+      if (r.ok) toast('Lexware Browser geöffnet — frische Session', 'upload');
       else toast(d.detail || 'Fehler', 'error');
     } catch (err) {
       toast('Fehler: ' + err.message, 'error');
@@ -650,17 +632,20 @@
     finally { setLoading(btn, false); }
   }
 
-  // ── CLEANUP ───────────────────────────────────────────────
-  async function cleanupLocks() {
-    const btn = document.getElementById('btn-cleanup');
-    setLoading(btn, true);
+  // ── LOG DOWNLOAD ──────────────────────────────────────────
+  async function downloadCurrentLog() {
     try {
-      const r = await fetch(`${API}/cleanup/locks`, { method: 'POST', headers: authHeaders() });
-      const d = await r.json();
-      if (r.ok) toast(`🧹 ${d.message || 'Locks aufgeräumt'}`, 'success');
-      else toast(d.detail || 'Fehler', 'error');
+      const r = await fetch(`${API}/logs/download`, { headers: authHeaders() });
+      if (!r.ok) { toast('Log nicht verfügbar', 'error'); return; }
+      const blob = await r.blob();
+      const cd = r.headers.get('content-disposition') || '';
+      const match = cd.match(/filename="?([^";\s]+)"?/);
+      const fname = match ? match[1] : 'invoice-pi-app.log';
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = fname; a.click();
+      URL.revokeObjectURL(url);
+      toast('✓ Log heruntergeladen', 'success');
     } catch (err) { toast('Fehler: ' + err.message, 'error'); }
-    finally { setLoading(btn, false); }
   }
 
   // ── FILE DROP ZONE (Upload) ───────────────────────────────
