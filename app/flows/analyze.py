@@ -115,7 +115,6 @@ INVOICE_NR_PATTERNS = [
     r"Rechnung\s*-?\s*Nr\.?\s*:?\s*([0-9][0-9\s\-/]{1,15}[0-9])",
     r"Invoice\s*(?:No|Number|Nr)\.?[:\s#]+([A-Z0-9\-/]{4,30})",
     r"Beleg(?:nummer)?[:\s#]+([A-Z0-9\-/]{4,30})",
-    r"(?:No|Nr)\.[:\s]+([A-Z0-9\-/]{4,30})",
 
     # Amazon
     r"Bestellnummer[:\s]+(\d{3}-\d{7}-\d{7})",
@@ -130,9 +129,16 @@ INVOICE_NR_PATTERNS = [
     # Pieksauber
     r"(RECH\d{8})",
 
-    # Apple
-    r"DOKUMENT-NR\.?\s*([A-Z0-9\-]{4,30})",
+    # Apple — Wert steht in der nächsten Zeile, ggf. nach BESTELLNR.
+    # "BESTELLNR. DOKUMENT-NR.\nMMGGHHNBB7 826133540398 DEU"
+    # "DOKUMENT-NR. RECHNUNGSDATUM\n826133540398 14.05.2026"
+    r"DOKUMENT-NR\.?[^\n]*\n(?:[A-Z][A-Z0-9]*\s+)?(\d{6,20})",
+    # Fallback: Wert auf gleicher Zeile (z. B. "Dokument: 826133540398")
+    r"DOKUMENT-NR\.?\s+(\d{6,20})",
     r"Dokument[:\s]+([A-Z0-9\-]{4,30})",
+
+    # Generisch — nur wenn Wert mind. eine Ziffer enthält (verhindert Namen wie "Alexander")
+    r"(?:No|Nr)\.[:\s]+([A-Z0-9\-/]*\d[A-Z0-9\-/]{2,28})",
 ]
 
 AMOUNT_PATTERNS = [
